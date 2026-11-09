@@ -81,6 +81,7 @@ signals:
 	void movedUp(EffectView* view);
 	void movedDown(EffectView* view);
 	void deletedPlugin(EffectView* view);
+	void pasteEffectRequested();
 
 protected:
 	void contextMenuEvent( QContextMenuEvent * _me ) override;

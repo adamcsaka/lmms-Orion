@@ -209,15 +209,7 @@ void EffectView::copyEffect()
 
 void EffectView::pasteEffect()
 {
-	auto parentRack = qobject_cast<EffectRackView*>( parentWidget() );
-	if (!parentRack)
-	{
-		parentRack = findParent<EffectRackView>();
-	}
-	if (parentRack)
-	{
-		parentRack->pasteEffect();
-	}
+	emit pasteEffectRequested();
 }
 
 void EffectView::keyPressEvent( QKeyEvent * _ke )

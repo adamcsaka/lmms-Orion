@@ -183,6 +183,7 @@ void EffectRackView::update()
 			connect(view, &EffectView::movedUp, this, &EffectRackView::moveUp);
 			connect(view, &EffectView::movedDown, this, &EffectRackView::moveDown);
 			connect(view, &EffectView::deletedPlugin, this, &EffectRackView::deletePlugin, Qt::QueuedConnection);
+			connect(view, &EffectView::pasteEffectRequested, this, &EffectRackView::pasteEffect);
 
 			QAction* moveUpAction = new QAction(view);
 			moveUpAction->setShortcut(keySequence(Qt::Key_Up, Qt::AltModifier));
@@ -316,7 +317,7 @@ void EffectRackView::pasteEffect()
 			if (e != nullptr && e->isOkay())
 			{
 				e->restoreState( effectData );
-				fxChain()->addEffect( e );
+				fxChain()->appendEffect( e );
 			}
 		}
 	}
