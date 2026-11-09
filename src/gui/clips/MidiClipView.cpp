@@ -98,6 +98,20 @@ void MidiClipView::openInPianoRoll()
 	pRoll->setFocus();
 }
 
+void MidiClipView::changeStepCount()
+{
+	if (!m_clip) { return; }
+	bool ok = false;
+	int newSteps = QInputDialog::getInt(
+		this, tr("Set track steps"),
+		tr("Number of steps for this track (e.g. 12 for 3/4, 7 for 7/8):"),
+		m_clip->steps(), 1, 1024, 1, &ok );
+	if (ok)
+	{
+		m_clip->setSteps(newSteps);
+	}
+}
+
 
 
 
@@ -251,6 +265,8 @@ void MidiClipView::constructContextMenu( QMenu * _cm )
 			tr( "Remove steps" ), m_clip, SLOT(removeSteps()));
 		_cm->addAction( embed::getIconPixmap( "step_btn_duplicate" ),
 			tr( "Clone Steps" ), m_clip, SLOT(cloneSteps()));
+		_cm->addAction( embed::getIconPixmap( "settings" ),
+			tr( "Set track step count..." ), this, SLOT(changeStepCount()));
 	}
 }
 
@@ -662,7 +678,8 @@ void MidiClipView::paintEvent( QPaintEvent * )
 			const int x = BORDER_WIDTH + static_cast<int>(it * w / steps);
 			const int y = BeatStepButtonOffset;
 
-			const bool isAtPlayPos = Engine::getSong()->getPlayPos(Song::PlayMode::Pattern) * TimePos::stepsPerBar() / TimePos::ticksPerBar() == it
+			const int curStepPos = (Engine::getSong()->getPlayPos(Song::PlayMode::Pattern) * TimePos::stepsPerBar() / TimePos::ticksPerBar()) % steps;
+			const bool isAtPlayPos = (curStepPos == it)
 				&& Engine::getSong()->playMode() == Song::PlayMode::Pattern;
 
 			if (n)

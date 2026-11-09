@@ -171,7 +171,7 @@ TimePos MidiClip::beatClipLength() const
 		max_length = m_steps * TimePos::ticksPerBar() / TimePos::stepsPerBar();
 	}
 
-	return TimePos{max_length}.nextFullBar() * TimePos::ticksPerBar();
+	return TimePos{max_length};
 }
 
 
@@ -613,6 +613,21 @@ void MidiClip::removeSteps()
 		updateLength();
 		emit dataChanged();
 	}
+}
+
+void MidiClip::setSteps( int newSteps )
+{
+	if( newSteps < 1 || newSteps == m_steps ) { return; }
+	if( newSteps < m_steps )
+	{
+		for( int i = newSteps; i < m_steps; ++i )
+		{
+			setStep( i, false );
+		}
+	}
+	m_steps = newSteps;
+	updateLength();
+	emit dataChanged();
 }
 
 

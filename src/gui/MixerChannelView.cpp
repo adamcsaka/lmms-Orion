@@ -35,6 +35,7 @@
 #include <QPainter>
 #include <QStackedWidget>
 #include <QVBoxLayout>
+#include <QDomDocument>
 
 #include "AutomatableButton.h"
 #include "CaptionMenu.h"
@@ -172,6 +173,10 @@ void MixerChannelView::contextMenuEvent(QContextMenuEvent*)
 	}
 
 	contextMenu->addAction(tr("Rename &channel"), this, &MixerChannelView::renameChannel);
+	if (!isMasterChannel())
+	{
+		contextMenu->addAction(embed::getIconPixmap("clone"), tr("&Duplicate channel"), this, &MixerChannelView::duplicateChannel);
+	}
 	contextMenu->addSeparator();
 
 	if (!isMasterChannel()) // no remove-option in master
@@ -289,6 +294,34 @@ void MixerChannelView::renameFinished()
 	}
 
 	setToolTip(mc->m_name);
+}
+
+void MixerChannelView::duplicateChannel()
+{
+	if (isMasterChannel()) { return; }
+
+	MixerChannel* srcChan = mixerChannel();
+	if (!srcChan) { return; }
+
+	int newIndex = m_mixerView->addNewChannel();
+	MixerChannel* destChan = Engine::mixer()->channel(newIndex);
+	if (!destChan) { return; }
+
+	destChan->m_name = srcChan->m_name + " " + tr("(Copy)");
+	destChan->m_volumeModel.setValue(srcChan->m_volumeModel.value());
+	destChan->m_panningModel.setValue(srcChan->m_panningModel.value());
+	destChan->m_muteModel.setValue(srcChan->m_muteModel.value());
+	destChan->setColor(srcChan->color());
+
+	// Deep clone the entire effect chain via XML serialization
+	QDomDocument doc;
+	QDomElement root = doc.createElement("fx_clone");
+	doc.appendChild(root);
+	srcChan->m_fxChain.saveSettings(doc, root);
+	destChan->m_fxChain.loadSettings(root);
+
+	Engine::getSong()->setModified();
+	m_mixerView->update();
 }
 
 void MixerChannelView::resetColor()

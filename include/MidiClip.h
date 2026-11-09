@@ -129,6 +129,8 @@ public slots:
 	void addSteps();
 	void cloneSteps();
 	void removeSteps();
+	void setSteps( int newSteps );
+	int steps() const { return m_steps; }
 	void clear();
 
 protected:

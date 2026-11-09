@@ -30,7 +30,13 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QVBoxLayout>
+#include <QClipboard>
+#include <QMimeData>
+#include <QDomDocument>
+#include <QKeyEvent>
 
+#include "CaptionMenu.h"
+#include "embed.h"
 #include "DeprecationHelper.h"
 #include "EffectSelectDialog.h"
 #include "EffectView.h"
@@ -280,6 +286,62 @@ QSize EffectRackView::sizeHint() const
 {
 	// Use the formula from InstrumentTrackWindow.cpp
 	return QSize{EffectRackView::DEFAULT_WIDTH, 254 /* INSTRUMENT_HEIGHT */ - 4 - 1};
+}
+
+void EffectRackView::pasteEffect()
+{
+	if (!fxChain()) { return; }
+
+	const auto clipboard = QApplication::clipboard();
+	const auto mimeData = clipboard ? clipboard->mimeData() : nullptr;
+	if (!mimeData || (!mimeData->hasFormat( "application/x-lmms-effect" ) && !mimeData->hasText()))
+	{
+		return;
+	}
+
+	QByteArray data = mimeData->hasFormat( "application/x-lmms-effect" )
+		? mimeData->data( "application/x-lmms-effect" )
+		: mimeData->text().toUtf8();
+
+	QDomDocument doc;
+	if (doc.setContent( data ))
+	{
+		QDomElement root = doc.documentElement();
+		QDomElement effectData = root.firstChildElement( "effect" );
+		if (!effectData.isNull())
+		{
+			const QString name = effectData.attribute( "name" );
+			EffectKey key( effectData.elementsByTagName( "key" ).item( 0 ).toElement() );
+			Effect* e = Effect::instantiate( name.toUtf8(), fxChain(), &key );
+			if (e != nullptr && e->isOkay())
+			{
+				e->restoreState( effectData );
+				fxChain()->addEffect( e );
+			}
+		}
+	}
+}
+
+void EffectRackView::keyPressEvent( QKeyEvent* event )
+{
+	if (event->matches( QKeySequence::Paste ))
+	{
+		pasteEffect();
+		event->accept();
+		return;
+	}
+	QWidget::keyPressEvent( event );
+}
+
+void EffectRackView::contextMenuEvent( QContextMenuEvent* event )
+{
+	QPointer<CaptionMenu> contextMenu = new CaptionMenu( tr( "Effects Chain" ), this );
+	contextMenu->addAction( embed::getIconPixmap( "add" ), tr( "&Add effect" ), this, SLOT(addEffect()) );
+	contextMenu->addAction( embed::getIconPixmap( "edit_paste" ), tr( "&Paste effect" ), this, SLOT(pasteEffect()), QKeySequence::Paste );
+	contextMenu->addSeparator();
+	contextMenu->addAction( embed::getIconPixmap( "cancel" ), tr( "&Clear all effects" ), this, SLOT(clearViews()) );
+	contextMenu->exec( QCursor::pos() );
+	delete contextMenu;
 }
 
 

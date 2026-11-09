@@ -54,11 +54,16 @@ public slots:
 	void moveUp(EffectView* view);
 	void moveDown(EffectView* view);
 	void deletePlugin(EffectView* view);
+	void pasteEffect();
 
 private slots:
 	virtual void update();
 	void addEffect();
 
+
+protected:
+	void keyPressEvent( QKeyEvent* event ) override;
+	void contextMenuEvent( QContextMenuEvent* event ) override;
 
 private:
 	void modelChanged() override;

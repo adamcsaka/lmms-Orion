@@ -74,6 +74,8 @@ public slots:
 	void moveDown();
 	void deletePlugin();
 	void corruptStateUpdate();
+	void copyEffect();
+	void pasteEffect();
 
 signals:
 	void movedUp(EffectView* view);
@@ -83,6 +85,7 @@ signals:
 protected:
 	void contextMenuEvent( QContextMenuEvent * _me ) override;
 	void paintEvent( QPaintEvent * _pe ) override;
+	void keyPressEvent( QKeyEvent * _ke ) override;
 	void modelChanged() override;
 
 

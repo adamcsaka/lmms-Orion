@@ -305,8 +305,8 @@ InstrumentFunctionArpeggio::InstrumentFunctionArpeggio( Model * _parent ) :
 	m_arpCycleModel( 0.0f, 0.0f, 6.0f, 1.0f, this, tr( "Cycle steps" ) ),
 	m_arpSkipModel( 0.0f, 0.0f, 100.0f, 1.0f, this, tr( "Skip rate" ) ),
 	m_arpMissModel( 0.0f, 0.0f, 100.0f, 1.0f, this, tr( "Miss rate" ) ),
-	m_arpTimeModel( 200.0f, 25.0f, 2000.0f, 1.0f, 2000, this, tr( "Arpeggio time" ) ),
-	m_arpGateModel( 100.0f, 1.0f, 200.0f, 1.0f, this, tr( "Arpeggio gate" ) ),
+	m_arpTimeModel( 200.0f, 25.0f, 2000.0f, 0.1f, 2000, this, tr( "Arpeggio time" ) ),
+	m_arpGateModel( 100.0f, 1.0f, 200.0f, 0.1f, this, tr( "Arpeggio gate" ) ),
 	m_arpDirectionModel( this, tr( "Arpeggio direction" ) ),
 	m_arpModeModel( this, tr( "Arpeggio mode" ) )
 {
@@ -322,6 +322,9 @@ InstrumentFunctionArpeggio::InstrumentFunctionArpeggio( Model * _parent ) :
 	m_arpDirectionModel.addItem( tr( "Down and up" ), std::make_unique<PixmapLoader>( "arp_up_and_down" ) );
 	m_arpDirectionModel.addItem( tr( "Random" ), std::make_unique<PixmapLoader>( "arp_random" ) );
 	m_arpDirectionModel.setInitValue( static_cast<float>(ArpDirection::Up) );
+
+	m_arpTimeModel.setDigits( 2 );
+	m_arpGateModel.setDigits( 2 );
 
 	m_arpModeModel.addItem( tr( "Free" ), std::make_unique<PixmapLoader>( "arp_free" ) );
 	m_arpModeModel.addItem( tr( "Sort" ), std::make_unique<PixmapLoader>( "arp_sort" ) );
@@ -393,7 +396,7 @@ void InstrumentFunctionArpeggio::processNote( NotePlayHandle * _n )
 	// correctly... -> arp_frames frames silence at the start of every note!
 	int cur_frame = (arpMode != ArpMode::Free ?
 						cnphv.first()->totalFramesPlayed() :
-						_n->totalFramesPlayed()) + arp_frames - 1;
+						_n->actualPhysicalFrames()) + arp_frames - 1;
 	// used for loop
 	f_cnt_t frames_processed = arpMode != ArpMode::Free ? cnphv.first()->noteOffset() : _n->noteOffset();
 

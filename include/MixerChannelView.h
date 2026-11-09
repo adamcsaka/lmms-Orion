@@ -87,6 +87,7 @@ public:
 
 public slots:
 	void renameChannel();
+	void duplicateChannel();
 	void resetColor();
 	void selectColor();
 	void randomizeColor();

@@ -59,6 +59,7 @@ NotePlayHandle::NotePlayHandle( InstrumentTrack* instrumentTrack,
 	m_instrumentTrack( instrumentTrack ),
 	m_frames( 0 ),
 	m_totalFramesPlayed( 0 ),
+	m_actualPhysicalFrames( 0 ),
 	m_framesBeforeRelease( 0 ),
 	m_releaseFramesToDo( 0 ),
 	m_releaseFramesDone( 0 ),
@@ -320,6 +321,7 @@ void NotePlayHandle::play( SampleFrame* _working_buffer )
 
 	// update internal data
 	m_totalFramesPlayed += framesThisPeriod;
+	m_actualPhysicalFrames += framesThisPeriod;
 	unlock();
 }
 

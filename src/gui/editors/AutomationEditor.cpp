@@ -351,7 +351,7 @@ bool AutomationEditor::fineTuneValue(timeMap::iterator node, bool editingOutValu
 			: INVAL(node),
 		m_clip->firstObject()->minValue<float>(),
 		m_clip->firstObject()->maxValue<float>(),
-		3,
+		std::max(6, m_clip->firstObject() ? m_clip->firstObject()->getDigitCount() : 6),
 		&ok
 	);
 

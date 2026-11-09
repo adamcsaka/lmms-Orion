@@ -585,7 +585,7 @@ void VolumeKnob::enterValue()
 		initialDbValue,
 		lowerBound,
 		upperBound,
-		model()->getDigitCount(),
+		std::max(4, model()->getDigitCount()),
 		&ok
 	);
 

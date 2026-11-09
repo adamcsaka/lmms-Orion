@@ -77,6 +77,7 @@ protected slots:
 	void openInPianoRoll();
 	void setGhostInPianoRoll();
 	void setGhostInAutomationEditor();
+	void changeStepCount();
 
 	void resetName();
 	void changeName();

@@ -26,10 +26,16 @@
 #include <QGraphicsOpacityEffect>
 #include <QLayout>
 #include <QMouseEvent>
+#include <QKeyEvent>
 #include <QPushButton>
 #include <QPainter>
+#include <QApplication>
+#include <QClipboard>
+#include <QMimeData>
+#include <QDomDocument>
 
 #include "EffectView.h"
+#include "EffectRackView.h"
 #include "DummyEffect.h"
 #include "CaptionMenu.h"
 #include "embed.h"
@@ -169,12 +175,66 @@ void EffectView::contextMenuEvent( QContextMenuEvent * )
 						tr( "Move &down" ),
 						this, SLOT(moveDown()));
 	contextMenu->addSeparator();
+	contextMenu->addAction( embed::getIconPixmap( "edit_copy" ),
+						tr( "&Copy effect" ),
+						this, SLOT(copyEffect()), QKeySequence::Copy);
+	contextMenu->addAction( embed::getIconPixmap( "edit_paste" ),
+						tr( "&Paste effect" ),
+						this, SLOT(pasteEffect()), QKeySequence::Paste);
+	contextMenu->addSeparator();
 	contextMenu->addAction( embed::getIconPixmap( "cancel" ),
 						tr( "&Remove this plugin" ),
 						this, SLOT(deletePlugin()));
 	contextMenu->addSeparator();
 	contextMenu->exec( QCursor::pos() );
 	delete contextMenu;
+}
+
+void EffectView::copyEffect()
+{
+	if (!effect() || !effect()->descriptor()) { return; }
+	QDomDocument doc;
+	QDomElement root = doc.createElement( "lmms_clipboard_effects" );
+	doc.appendChild( root );
+	QDomElement ef = effect()->saveState( doc, root );
+	ef.setAttribute( "name", QString::fromUtf8( effect()->descriptor()->name ) );
+	ef.appendChild( effect()->key().saveXML( doc ) );
+
+	auto clipboard = QApplication::clipboard();
+	auto mimeData = new QMimeData();
+	mimeData->setData( "application/x-lmms-effect", doc.toByteArray() );
+	mimeData->setText( doc.toString() );
+	clipboard->setMimeData( mimeData );
+}
+
+void EffectView::pasteEffect()
+{
+	auto parentRack = qobject_cast<EffectRackView*>( parentWidget() );
+	if (!parentRack)
+	{
+		parentRack = findParent<EffectRackView>();
+	}
+	if (parentRack)
+	{
+		parentRack->pasteEffect();
+	}
+}
+
+void EffectView::keyPressEvent( QKeyEvent * _ke )
+{
+	if (_ke->matches( QKeySequence::Copy ))
+	{
+		copyEffect();
+		_ke->accept();
+		return;
+	}
+	else if (_ke->matches( QKeySequence::Paste ))
+	{
+		pasteEffect();
+		_ke->accept();
+		return;
+	}
+	PluginView::keyPressEvent( _ke );
 }
 
 

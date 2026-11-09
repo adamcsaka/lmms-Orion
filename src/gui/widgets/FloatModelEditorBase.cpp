@@ -509,7 +509,7 @@ void FloatModelEditorBase::enterValue()
 		model()->getRoundedValue(),
 		model()->minValue(),
 		model()->maxValue(),
-		model()->getDigitCount(),
+		std::max(4, model()->getDigitCount()),
 		&ok
 	);
 

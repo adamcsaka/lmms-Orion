@@ -172,6 +172,11 @@ public:
 		return m_totalFramesPlayed;
 	}
 
+	f_cnt_t actualPhysicalFrames() const
+	{
+		return m_actualPhysicalFrames;
+	}
+
 	/*! Returns volume level at given frame (envelope/LFO) */
 	float volumeLevel( const f_cnt_t frame );
 
@@ -298,6 +303,7 @@ private:
 	f_cnt_t m_totalFramesPlayed;			// total frame-counter - used for
 											// figuring out whether a whole note
 											// has been played
+	f_cnt_t m_actualPhysicalFrames;			// unscaled physical frame counter for tempo-independent timing (Free Arp)
 	f_cnt_t m_framesBeforeRelease;			// number of frames after which note
 											// is released
 	f_cnt_t m_releaseFramesToDo;			// total numbers of frames to be

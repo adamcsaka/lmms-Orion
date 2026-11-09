@@ -739,6 +739,12 @@ bool InstrumentTrack::play( const TimePos & _start, const f_cnt_t _frames,
 			cur_start -= c->startPosition() + c->startTimeOffset();
 		}
 
+		// Independent loop length per track (Orion-style polyrhythms)
+		if ( c->length() > 0 && cur_start >= c->length() )
+		{
+			cur_start = cur_start % c->length();
+		}
+
 		// get all notes from the given clip...
 		const NoteVector & notes = c->notes();
 		// ...and set our index to zero
