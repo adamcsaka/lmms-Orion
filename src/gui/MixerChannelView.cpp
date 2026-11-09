@@ -304,12 +304,11 @@ void MixerChannelView::duplicateChannel()
 	if (!srcChan) { return; }
 
 	int newIndex = m_mixerView->addNewChannel();
-	MixerChannel* destChan = Engine::mixer()->channel(newIndex);
+	MixerChannel* destChan = Engine::mixer()->mixerChannel(newIndex);
 	if (!destChan) { return; }
 
 	destChan->m_name = srcChan->m_name + " " + tr("(Copy)");
 	destChan->m_volumeModel.setValue(srcChan->m_volumeModel.value());
-	destChan->m_panningModel.setValue(srcChan->m_panningModel.value());
 	destChan->m_muteModel.setValue(srcChan->m_muteModel.value());
 	destChan->setColor(srcChan->color());
 
