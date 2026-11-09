@@ -1285,6 +1285,74 @@ void PianoRoll::shiftPos(const NoteVector& notes, int amount)
 
 
 
+void PianoRoll::flipHorizontally()
+{
+	if (!hasValidMidiClip()) { return; }
+	auto selectedNotes = getSelectedNotes();
+	if (selectedNotes.empty()) { flipHorizontally(m_midiClip->notes()); }
+	else { flipHorizontally(selectedNotes); }
+}
+
+void PianoRoll::flipHorizontally(const NoteVector& notes)
+{
+	if (notes.empty()) { return; }
+	m_midiClip->addJournalCheckPoint();
+
+	tick_t minPos = notes.front()->pos();
+	tick_t maxEnd = notes.front()->endPos();
+	for (const Note* n : notes)
+	{
+		minPos = std::min(minPos, n->pos());
+		maxEnd = std::max(maxEnd, n->endPos());
+	}
+
+	for (Note* n : notes)
+	{
+		tick_t newPos = minPos + (maxEnd - n->endPos());
+		n->setPos(newPos);
+	}
+
+	m_midiClip->rearrangeAllNotes();
+	m_midiClip->dataChanged();
+	update();
+	getGUI()->songEditor()->update();
+}
+
+void PianoRoll::invertVertically()
+{
+	if (!hasValidMidiClip()) { return; }
+	auto selectedNotes = getSelectedNotes();
+	if (selectedNotes.empty()) { invertVertically(m_midiClip->notes()); }
+	else { invertVertically(selectedNotes); }
+}
+
+void PianoRoll::invertVertically(const NoteVector& notes)
+{
+	if (notes.empty()) { return; }
+	m_midiClip->addJournalCheckPoint();
+
+	int minKey = notes.front()->key();
+	int maxKey = notes.front()->key();
+	for (const Note* n : notes)
+	{
+		minKey = std::min(minKey, n->key());
+		maxKey = std::max(maxKey, n->key());
+	}
+	int centerSum = minKey + maxKey;
+
+	for (Note* n : notes)
+	{
+		int newKey = std::clamp(centerSum - n->key(), 0, 127);
+		n->setKey(newKey);
+	}
+
+	m_midiClip->rearrangeAllNotes();
+	m_midiClip->dataChanged();
+	update();
+	getGUI()->songEditor()->update();
+}
+
+
 bool PianoRoll::isSelection() const // are any notes selected?
 {
 	for( const Note *note : m_midiClip->notes() )
@@ -1489,6 +1557,24 @@ void PianoRoll::keyPressEvent(QKeyEvent* ke)
 		case Qt::Key_Delete:
 			deleteSelectedNotes();
 			ke->accept();
+			break;
+
+		case Qt::Key_X:
+			if (hasValidMidiClip() && m_action == Action::None && (ke->modifiers() == Qt::NoModifier || ke->modifiers() == Qt::ShiftModifier))
+			{
+				flipHorizontally();
+				ke->accept();
+				return;
+			}
+			break;
+
+		case Qt::Key_Y:
+			if (hasValidMidiClip() && m_action == Action::None && (ke->modifiers() == Qt::NoModifier || ke->modifiers() == Qt::ShiftModifier))
+			{
+				invertVertically();
+				ke->accept();
+				return;
+			}
 			break;
 
 		case Qt::Key_Home:

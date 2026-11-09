@@ -312,6 +312,10 @@ private:
 	void shiftPos(const NoteVector& notes, int amount);
 	void shiftSemiTone(int amount);
 	void shiftSemiTone(const NoteVector& notes, int amount);
+	void flipHorizontally();
+	void flipHorizontally(const NoteVector& notes);
+	void invertVertically();
+	void invertVertically(const NoteVector& notes);
 	bool isSelection() const;
 	int selectionCount() const;
 	void testPlayNote( Note * n );
