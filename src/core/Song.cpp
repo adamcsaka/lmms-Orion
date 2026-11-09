@@ -69,7 +69,7 @@ Song::Song() :
 	m_globalAutomationTrack( dynamic_cast<AutomationTrack *>(
 				Track::create( Track::Type::HiddenAutomation,
 								this ) ) ),
-	m_tempoModel( DefaultTempo, MinTempo, MaxTempo, 0.001, this, tr( "Tempo" ) ),
+	m_tempoModel( DefaultTempo, MinTempo, MaxTempo, 0.001f, this, tr( "Tempo" ) ),
 	m_timeSigModel( this ),
 	m_oldTicksPerBar( DefaultTicksPerBar ),
 	m_masterVolumeModel( 100, 0, 200, this, tr( "Master volume" ) ),
