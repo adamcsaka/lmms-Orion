@@ -96,7 +96,6 @@ Song::Song() :
 	m_loopRenderRemaining(1),
 	m_oldAutomatedValues()
 {
-	m_tempoModel.setDigits( 3 );
 	connect( &m_tempoModel, SIGNAL(dataChanged()),
 			this, SLOT(setTempo()), Qt::DirectConnection );
 	connect( &m_tempoModel, SIGNAL(dataUnchanged()),

@@ -323,9 +323,6 @@ InstrumentFunctionArpeggio::InstrumentFunctionArpeggio( Model * _parent ) :
 	m_arpDirectionModel.addItem( tr( "Random" ), std::make_unique<PixmapLoader>( "arp_random" ) );
 	m_arpDirectionModel.setInitValue( static_cast<float>(ArpDirection::Up) );
 
-	m_arpTimeModel.setDigits( 2 );
-	m_arpGateModel.setDigits( 2 );
-
 	m_arpModeModel.addItem( tr( "Free" ), std::make_unique<PixmapLoader>( "arp_free" ) );
 	m_arpModeModel.addItem( tr( "Sort" ), std::make_unique<PixmapLoader>( "arp_sort" ) );
 	m_arpModeModel.addItem( tr( "Sync" ), std::make_unique<PixmapLoader>( "arp_sync" ) );
