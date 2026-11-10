@@ -64,6 +64,8 @@ InstrumentTrack::InstrumentTrack(TrackContainer* tc) :
 	m_pitchModel(0, MinPitchDefault, MaxPitchDefault, 1, this, tr("Pitch")),
 	m_pitchRangeModel(1, 1, 60, this, tr("Pitch range")),
 	m_mixerChannelModel(0, 0, 0, this, tr("Mixer channel")),
+	m_midiGroupModel(0, 0, 16, this, tr("MIDI Group")),
+	m_bpmModel(0, 0, 999, this, tr("Track BPM")),
 	m_useMasterPitchModel(true, this, tr("Master pitch")),
 	m_instrument(nullptr),
 	m_soundShaping(this),
@@ -310,6 +312,24 @@ void InstrumentTrack::processInEvent( const MidiEvent& event, const TimePos& tim
 	if (Engine::getSong()->isExporting() && event.source() == MidiEvent::Source::External)
 	{
 		return;
+	}
+
+	static thread_local bool s_inProcessInEventBroadcast = false;
+	if( m_midiGroupModel.value() > 0 && !s_inProcessInEventBroadcast && Engine::getSong() != nullptr )
+	{
+		s_inProcessInEventBroadcast = true;
+		for( Track* t : Engine::getSong()->tracks() )
+		{
+			if( t != this && t->type() == Track::Type::Instrument && !t->isMuted() )
+			{
+				auto it = static_cast<InstrumentTrack*>( t );
+				if( it->midiGroupModel()->value() == m_midiGroupModel.value() )
+				{
+					it->processInEvent( event, time, offset );
+				}
+			}
+		}
+		s_inProcessInEventBroadcast = false;
 	}
 
 	bool eventHandled = false;
@@ -739,10 +759,39 @@ bool InstrumentTrack::play( const TimePos & _start, const f_cnt_t _frames,
 			cur_start -= c->startPosition() + c->startTimeOffset();
 		}
 
-		// Independent loop length per track (Orion-style polyrhythms)
-		if ( c->length() > 0 && cur_start >= c->length() )
+		const bool hasCustomBpm = m_bpmModel.value() > 0;
+		float inst_frames_per_tick = frames_per_tick;
+		tick_t tick_from = cur_start.getTicks() - 1;
+		tick_t tick_to = cur_start.getTicks();
+
+		if ( hasCustomBpm )
 		{
-			cur_start = cur_start % c->length();
+			const float songBpm = (Engine::getSong() != nullptr) ? Engine::getSong()->getTempo() : 120.0f;
+			const float ratio = static_cast<float>(m_bpmModel.value()) / (songBpm > 0.0f ? songBpm : 120.0f);
+			inst_frames_per_tick = Engine::audioEngine()->outputSampleRate() * 60.0f * 4 / DefaultTicksPerBar / m_bpmModel.value();
+
+			tick_t raw_from = static_cast<tick_t>(std::round((cur_start.getTicks() - 1) * ratio));
+			tick_t raw_to = static_cast<tick_t>(std::round(cur_start.getTicks() * ratio));
+			if (cur_start.getTicks() <= 0) { raw_from = -1; raw_to = 0; }
+
+			if ( c->length() > 0 )
+			{
+				tick_from = raw_from % c->length().getTicks();
+				tick_to = raw_to % c->length().getTicks();
+			}
+			else
+			{
+				tick_from = raw_from;
+				tick_to = raw_to;
+			}
+		}
+		else
+		{
+			// Independent loop length per track (Orion-style polyrhythms)
+			if ( c->length() > 0 && cur_start >= c->length() )
+			{
+				cur_start = cur_start % c->length();
+			}
 		}
 
 		// get all notes from the given clip...
@@ -753,7 +802,7 @@ bool InstrumentTrack::play( const TimePos & _start, const f_cnt_t _frames,
 		// very effective algorithm for playing notes that are
 		// posated within the current sample-frame
 
-		if( cur_start > 0 )
+		if( !hasCustomBpm && cur_start > 0 )
 		{
 			// skip notes which end before start-bar
 			while( nit != notes.end() && ( *nit )->endPos() < cur_start )
@@ -765,9 +814,29 @@ bool InstrumentTrack::play( const TimePos & _start, const f_cnt_t _frames,
 		while (nit != notes.end() && (*nit)->pos() < c->length() - c->startTimeOffset())
 		{
 			const auto currentNote = *nit;
-			// Skip any notes note at the current time pos or not overlapping with the start.
-			if (!(currentNote->pos() == cur_start
-				|| (cur_start == -c->startTimeOffset() && (*nit)->pos() < cur_start && (*nit)->endPos() > cur_start)))
+			bool shouldTrigger = false;
+			if ( hasCustomBpm )
+			{
+				if (tick_to >= tick_from)
+				{
+					shouldTrigger = (currentNote->pos() > tick_from && currentNote->pos() <= tick_to);
+				}
+				else
+				{
+					shouldTrigger = (currentNote->pos() > tick_from || currentNote->pos() <= tick_to);
+				}
+				if (cur_start.getTicks() == 0 && currentNote->pos() == 0)
+				{
+					shouldTrigger = true;
+				}
+			}
+			else
+			{
+				shouldTrigger = (currentNote->pos() == cur_start
+					|| (cur_start == -c->startTimeOffset() && (*nit)->pos() < cur_start && (*nit)->endPos() > cur_start));
+			}
+
+			if (!shouldTrigger)
 			{
 				++nit;
 				continue;
@@ -779,7 +848,7 @@ bool InstrumentTrack::play( const TimePos & _start, const f_cnt_t _frames,
 			// plays for the whole length of the sample
 			const auto noteFrames = currentNote->type() == Note::Type::Step
 				? 0
-				: (currentNote->endPos() - cur_start - noteOverlap) * frames_per_tick;
+				: (currentNote->endPos().getTicks() - (hasCustomBpm ? currentNote->pos().getTicks() : cur_start.getTicks()) - noteOverlap) * inst_frames_per_tick;
 
 			NotePlayHandle* notePlayHandle = NotePlayHandleManager::acquire(this, _offset, noteFrames, *currentNote);
 			notePlayHandle->setPatternTrack(pattern_track);
@@ -792,6 +861,31 @@ bool InstrumentTrack::play( const TimePos & _start, const f_cnt_t _frames,
 			}
 
 			Engine::audioEngine()->addPlayHandle( notePlayHandle );
+
+			static thread_local bool s_inMidiGroupPlayBroadcast = false;
+			if( m_midiGroupModel.value() > 0 && !s_inMidiGroupPlayBroadcast && Engine::getSong() != nullptr )
+			{
+				s_inMidiGroupPlayBroadcast = true;
+				for( Track* t : Engine::getSong()->tracks() )
+				{
+					if( t != this && t->type() == Track::Type::Instrument && !t->isMuted() )
+					{
+						auto it = static_cast<InstrumentTrack*>( t );
+						if( it->midiGroupModel()->value() == m_midiGroupModel.value() && it->instrument() != nullptr )
+						{
+							NotePlayHandle* peerHandle = NotePlayHandleManager::acquire(it, _offset, noteFrames, *currentNote);
+							peerHandle->setPatternTrack(pattern_track);
+							if( _clip_num < 0 )
+							{
+								peerHandle->setSongGlobalParentOffset( c->startPosition() + c->startTimeOffset());
+							}
+							Engine::audioEngine()->addPlayHandle( peerHandle );
+						}
+					}
+				}
+				s_inMidiGroupPlayBroadcast = false;
+			}
+
 			played_a_note = true;
 			++nit;
 		}
@@ -829,6 +923,8 @@ void InstrumentTrack::saveTrackSpecificSettings(QDomDocument& doc, QDomElement& 
 	m_pitchRangeModel.saveSettings( doc, thisElement, "pitchrange" );
 
 	m_mixerChannelModel.saveSettings( doc, thisElement, "mixch" );
+	m_midiGroupModel.saveSettings( doc, thisElement, "midigroup" );
+	m_bpmModel.saveSettings( doc, thisElement, "trackbpm" );
 	m_baseNoteModel.saveSettings( doc, thisElement, "basenote" );
 	m_firstKeyModel.saveSettings(doc, thisElement, "firstkey");
 	m_lastKeyModel.saveSettings(doc, thisElement, "lastkey");
@@ -901,6 +997,8 @@ void InstrumentTrack::loadTrackSpecificSettings( const QDomElement & thisElement
 	if ( !m_previewMode )
 	{
 		m_mixerChannelModel.loadSettings( thisElement, "mixch" );
+		m_midiGroupModel.loadSettings( thisElement, "midigroup" );
+		m_bpmModel.loadSettings( thisElement, "trackbpm" );
 	}
 	m_baseNoteModel.loadSettings( thisElement, "basenote" );
 	m_firstKeyModel.loadSettings(thisElement, "firstkey");

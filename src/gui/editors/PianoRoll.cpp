@@ -1285,6 +1285,74 @@ void PianoRoll::shiftPos(const NoteVector& notes, int amount)
 
 
 
+void PianoRoll::flipHorizontally()
+{
+	if (!hasValidMidiClip()) { return; }
+	auto selectedNotes = getSelectedNotes();
+	if (selectedNotes.empty()) { flipHorizontally(m_midiClip->notes()); }
+	else { flipHorizontally(selectedNotes); }
+}
+
+void PianoRoll::flipHorizontally(const NoteVector& notes)
+{
+	if (notes.empty()) { return; }
+	m_midiClip->addJournalCheckPoint();
+
+	tick_t minPos = notes.front()->pos().getTicks();
+	tick_t maxEnd = notes.front()->endPos().getTicks();
+	for (const Note* n : notes)
+	{
+		minPos = std::min(minPos, n->pos().getTicks());
+		maxEnd = std::max(maxEnd, n->endPos().getTicks());
+	}
+
+	for (Note* n : notes)
+	{
+		tick_t newPos = minPos + (maxEnd - n->endPos().getTicks());
+		n->setPos(newPos);
+	}
+
+	m_midiClip->rearrangeAllNotes();
+	m_midiClip->dataChanged();
+	update();
+	getGUI()->songEditor()->update();
+}
+
+void PianoRoll::invertVertically()
+{
+	if (!hasValidMidiClip()) { return; }
+	auto selectedNotes = getSelectedNotes();
+	if (selectedNotes.empty()) { invertVertically(m_midiClip->notes()); }
+	else { invertVertically(selectedNotes); }
+}
+
+void PianoRoll::invertVertically(const NoteVector& notes)
+{
+	if (notes.empty()) { return; }
+	m_midiClip->addJournalCheckPoint();
+
+	int minKey = notes.front()->key();
+	int maxKey = notes.front()->key();
+	for (const Note* n : notes)
+	{
+		minKey = std::min(minKey, n->key());
+		maxKey = std::max(maxKey, n->key());
+	}
+	int centerSum = minKey + maxKey;
+
+	for (Note* n : notes)
+	{
+		int newKey = std::clamp(centerSum - n->key(), 0, 127);
+		n->setKey(newKey);
+	}
+
+	m_midiClip->rearrangeAllNotes();
+	m_midiClip->dataChanged();
+	update();
+	getGUI()->songEditor()->update();
+}
+
+
 bool PianoRoll::isSelection() const // are any notes selected?
 {
 	for( const Note *note : m_midiClip->notes() )
@@ -1320,7 +1388,7 @@ void PianoRoll::keyPressEvent(QKeyEvent* ke)
 		}
 	}
 
-	if( hasValidMidiClip() && ke->modifiers() == Qt::NoModifier )
+	if( m_typingKeyboardEnabled && hasValidMidiClip() && ke->modifiers() == Qt::NoModifier )
 	{
 		const int key_num = PianoView::getKeyFromKeyEvent( ke );
 
@@ -1491,6 +1559,25 @@ void PianoRoll::keyPressEvent(QKeyEvent* ke)
 			ke->accept();
 			break;
 
+		case Qt::Key_X:
+			if (hasValidMidiClip() && m_action == Action::None && (ke->modifiers() == Qt::NoModifier || ke->modifiers() == Qt::ShiftModifier || ke->modifiers() == Qt::AltModifier))
+			{
+				flipHorizontally();
+				ke->accept();
+				return;
+			}
+			break;
+
+		case Qt::Key_Y:
+		case Qt::Key_Z:
+			if (hasValidMidiClip() && m_action == Action::None && (ke->modifiers() == Qt::NoModifier || ke->modifiers() == Qt::ShiftModifier || ke->modifiers() == Qt::AltModifier))
+			{
+				invertVertically();
+				ke->accept();
+				return;
+			}
+			break;
+
 		case Qt::Key_Home:
 			m_timeLine->timeline()->setTicks(0);
 			Engine::getSong()->setPlayPos(0, Song::PlayMode::None);
@@ -1558,7 +1645,7 @@ void PianoRoll::keyPressEvent(QKeyEvent* ke)
 
 void PianoRoll::keyReleaseEvent(QKeyEvent* ke )
 {
-	if( hasValidMidiClip() && ke->modifiers() == Qt::NoModifier )
+	if( m_typingKeyboardEnabled && hasValidMidiClip() && ke->modifiers() == Qt::NoModifier )
 	{
 		const int key_num = PianoView::getKeyFromKeyEvent( ke );
 		if (!ke->isAutoRepeat() && key_num > -1)
@@ -5230,6 +5317,15 @@ PianoRollWindow::PianoRollWindow() :
 	notesActionsToolBar->addSeparator();
 	notesActionsToolBar->addWidget(quantizeButton);
 
+	auto toggleKeyboardAction = notesActionsToolBar->addAction(
+		embed::getIconPixmap("piano"),
+		tr("Toggle computer keyboard note input (disable to use single-key shortcuts like X, Y)"));
+	toggleKeyboardAction->setCheckable(true);
+	toggleKeyboardAction->setChecked(m_editor->isTypingKeyboardEnabled());
+	connect(toggleKeyboardAction, &QAction::toggled, [this](bool checked) {
+		m_editor->setTypingKeyboardEnabled(checked);
+	});
+
 	// -- File actions
 	DropToolBar* fileActionsToolBar = addDropToolBarToTop(tr("File actions"));
 
@@ -5311,6 +5407,12 @@ PianoRollWindow::PianoRollWindow() :
 	connect(reverseAction, &QAction::triggered, [this](){ m_editor->reverseNotes(); });
 	reverseAction->setShortcut(keySequence(Qt::SHIFT, Qt::Key_R));
 
+	auto flipHorizAction = new QAction(embed::getIconPixmap("flip_x"), tr("Flip Horizontally (Retrograde) (X)"), noteToolsButton);
+	connect(flipHorizAction, &QAction::triggered, [this](){ m_editor->flipHorizontally(); });
+
+	auto flipVertAction = new QAction(embed::getIconPixmap("flip_y"), tr("Flip Vertically (Invert) (Y)"), noteToolsButton);
+	connect(flipVertAction, &QAction::triggered, [this](){ m_editor->invertVertically(); });
+
 	noteToolsButton->addAction(glueAction);
 	noteToolsButton->addAction(knifeAction);
 	noteToolsButton->addAction(strumAction);
@@ -5319,6 +5421,8 @@ PianoRollWindow::PianoRollWindow() :
 	noteToolsButton->addAction(minLengthAction);
 	noteToolsButton->addAction(maxLengthAction);
 	noteToolsButton->addAction(reverseAction);
+	noteToolsButton->addAction(flipHorizAction);
+	noteToolsButton->addAction(flipVertAction);
 
 	notesActionsToolBar->addWidget(noteToolsButton);
 
@@ -5524,6 +5628,22 @@ void PianoRollWindow::setCurrentMidiClip( MidiClip* clip )
 bool PianoRollWindow::isRecording() const
 {
 	return m_editor->isRecording();
+}
+
+
+
+
+void PianoRollWindow::flipHorizontally()
+{
+	if (m_editor) { m_editor->flipHorizontally(); }
+}
+
+
+
+
+void PianoRollWindow::invertVertically()
+{
+	if (m_editor) { m_editor->invertVertically(); }
 }
 
 

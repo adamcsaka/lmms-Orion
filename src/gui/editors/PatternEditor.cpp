@@ -324,6 +324,13 @@ PatternEditorWindow::PatternEditorWindow(PatternStore* ps) :
 						m_editor, SLOT(addSampleTrack()));
 	trackAndStepActionsToolBar->addAction(embed::getIconPixmap("add_automation"), tr("Add automation-track"),
 						m_editor, SLOT(addAutomationTrack()));
+	auto recordAutomationAction = trackAndStepActionsToolBar->addAction(
+		embed::getIconPixmap("record"), tr("Record automation into pattern (automatically records moved knobs/sliders)"));
+	recordAutomationAction->setCheckable(true);
+	recordAutomationAction->setChecked(ps->isRecordingAutomation());
+	connect(recordAutomationAction, &QAction::toggled, [ps](bool checked) {
+		ps->setRecordingAutomation(checked);
+	});
 
 	auto stretch = new QWidget(m_toolBar);
 	stretch->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);

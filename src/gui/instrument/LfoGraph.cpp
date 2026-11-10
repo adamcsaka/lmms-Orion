@@ -25,14 +25,23 @@
 
 #include "LfoGraph.h"
 
+#include <QContextMenuEvent>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
+#include <cmath>
+#include <random>
 
 #include "EnvelopeAndLfoParameters.h"
 #include "Oscillator.h"
 #include "ColorHelper.h"
-
+#include "Engine.h"
 #include "FontHelper.h"
+#include "Song.h"
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 namespace lmms
 {
@@ -57,6 +66,167 @@ void LfoGraph::mousePressEvent(QMouseEvent* me)
 	{
 		toggleAmountModel();
 	}
+}
+
+void LfoGraph::contextMenuEvent(QContextMenuEvent* ce)
+{
+	QMenu menu(this);
+	menu.addAction(tr("Generate Random Harmonics Wave"), [this]{ randomizeUserWave(0); });
+	menu.addAction(tr("Generate Smooth Random Spline"), [this]{ randomizeUserWave(2); });
+	menu.addAction(tr("Generate Stepped Random (S&H)"), [this]{ randomizeUserWave(1); });
+	menu.addSeparator();
+	menu.addAction(tr("Smooth Current Waveform"), [this]{ randomizeUserWave(4); });
+	menu.addAction(tr("Invert Current Waveform"), [this]{ randomizeUserWave(3); });
+	menu.addSeparator();
+	menu.addAction(tr("Toggle LFO Amount (0% / 100%)"), [this]{ toggleAmountModel(); update(); });
+	menu.exec(ce->globalPos());
+}
+
+void LfoGraph::randomizeUserWave(int type)
+{
+	auto* params = castModel<EnvelopeAndLfoParameters>();
+	if (!params) { return; }
+
+	const int numFrames = 512;
+	std::vector<SampleFrame> data(numFrames);
+
+	if (type == 3) // Invert
+	{
+		auto currentWave = params->getLfoUserWave();
+		if (currentWave && currentWave->size() >= 2)
+		{
+			data.resize(currentWave->size());
+			for (size_t i = 0; i < currentWave->size(); ++i)
+			{
+				data[i][0] = -currentWave->data()[i][0];
+				data[i][1] = -currentWave->data()[i][1];
+			}
+		}
+		else
+		{
+			for (int i = 0; i < numFrames; ++i)
+			{
+				float phase = static_cast<float>(i) / numFrames * 2.0f * static_cast<float>(M_PI);
+				float v = -std::sin(phase);
+				data[i][0] = v;
+				data[i][1] = v;
+			}
+		}
+	}
+	else if (type == 4) // Smooth
+	{
+		auto currentWave = params->getLfoUserWave();
+		if (currentWave && currentWave->size() >= 4)
+		{
+			size_t sz = currentWave->size();
+			data.resize(sz);
+			for (size_t i = 0; i < sz; ++i)
+			{
+				size_t prev = (i + sz - 1) % sz;
+				size_t next = (i + 1) % sz;
+				float v0 = 0.25f * currentWave->data()[prev][0] + 0.5f * currentWave->data()[i][0] + 0.25f * currentWave->data()[next][0];
+				float v1 = 0.25f * currentWave->data()[prev][1] + 0.5f * currentWave->data()[i][1] + 0.25f * currentWave->data()[next][1];
+				data[i][0] = v0;
+				data[i][1] = v1;
+			}
+		}
+		else
+		{
+			return;
+		}
+	}
+	else if (type == 1) // Stepped Random (Sample & Hold)
+	{
+		std::random_device rd;
+		std::mt19937 gen(rd());
+		std::uniform_real_distribution<float> dis(-1.0f, 1.0f);
+		const int steps = 16;
+		const int stepSize = numFrames / steps;
+		for (int s = 0; s < steps; ++s)
+		{
+			float v = dis(gen);
+			for (int i = 0; i < stepSize; ++i)
+			{
+				int idx = s * stepSize + i;
+				if (idx < numFrames)
+				{
+					data[idx][0] = v;
+					data[idx][1] = v;
+				}
+			}
+		}
+	}
+	else if (type == 2) // Smooth Random Spline
+	{
+		std::random_device rd;
+		std::mt19937 gen(rd());
+		std::uniform_real_distribution<float> dis(-1.0f, 1.0f);
+		const int numPoints = 8;
+		float pts[9];
+		for (int p = 0; p < numPoints; ++p)
+		{
+			pts[p] = dis(gen);
+		}
+		pts[numPoints] = pts[0]; // seamless periodic loop
+
+		for (int i = 0; i < numFrames; ++i)
+		{
+			float pos = static_cast<float>(i) / numFrames * numPoints;
+			int idx = static_cast<int>(pos);
+			float frac = pos - idx;
+			// cosine interpolation
+			float mu2 = (1.0f - std::cos(frac * static_cast<float>(M_PI))) / 2.0f;
+			float v = pts[idx] * (1.0f - mu2) + pts[idx + 1] * mu2;
+			data[i][0] = v;
+			data[i][1] = v;
+		}
+	}
+	else // Type 0: Random Harmonics
+	{
+		std::random_device rd;
+		std::mt19937 gen(rd());
+		std::uniform_real_distribution<float> distAmp(0.1f, 1.0f);
+		std::uniform_real_distribution<float> distPhase(0.0f, 2.0f * static_cast<float>(M_PI));
+
+		const int numHarmonics = 6;
+		float amps[6];
+		float phases[6];
+		float maxVal = 0.001f;
+
+		for (int h = 0; h < numHarmonics; ++h)
+		{
+			amps[h] = distAmp(gen) / (h + 1.0f);
+			phases[h] = distPhase(gen);
+		}
+
+		for (int i = 0; i < numFrames; ++i)
+		{
+			float phase = static_cast<float>(i) / numFrames * 2.0f * static_cast<float>(M_PI);
+			float v = 0.0f;
+			for (int h = 0; h < numHarmonics; ++h)
+			{
+				v += amps[h] * std::sin((h + 1) * phase + phases[h]);
+			}
+			data[i][0] = v;
+			data[i][1] = v;
+			maxVal = std::max(maxVal, std::abs(v));
+		}
+
+		for (int i = 0; i < numFrames; ++i)
+		{
+			data[i][0] /= maxVal;
+			data[i][1] /= maxVal;
+		}
+	}
+
+	auto newBuffer = std::make_shared<SampleBuffer>(std::move(data), Engine::audioEngine()->outputSampleRate(), "");
+	params->setUserWave(newBuffer);
+	params->getLfoWaveModel().setValue(static_cast<int>(EnvelopeAndLfoParameters::LfoShape::UserDefinedWave));
+	if (Engine::getSong())
+	{
+		Engine::getSong()->setModified();
+	}
+	update();
 }
 
 void LfoGraph::paintEvent(QPaintEvent*)

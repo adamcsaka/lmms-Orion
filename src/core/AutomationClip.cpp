@@ -53,6 +53,7 @@ AutomationClip::AutomationClip( AutomationTrack * _auto_track ) :
 	m_progressionType( ProgressionType::Discrete ),
 	m_dragging( false ),
 	m_isRecording( false ),
+	m_steps( 0 ),
 	m_lastRecordedValue( 0 )
 {
 	changeLength( TimePos( 1, 0 ) );
@@ -69,6 +70,7 @@ AutomationClip::AutomationClip( const AutomationClip & _clip_to_copy ) :
 	m_progressionType(_clip_to_copy.m_progressionType),
 	m_dragging(false),
 	m_isRecording(_clip_to_copy.m_isRecording),
+	m_steps(_clip_to_copy.m_steps),
 	m_lastRecordedValue(0)
 {
 	// Locks the mutex of the copied AutomationClip to make sure it
@@ -192,12 +194,28 @@ TimePos AutomationClip::timeMapLength() const
 
 
 
+void AutomationClip::setSteps(int newSteps)
+{
+	if (newSteps < 1 || newSteps == m_steps) { return; }
+	m_steps = newSteps;
+	updateLength();
+	emit dataChanged();
+}
+
+
+
+
 void AutomationClip::updateLength()
 {
 	// Technically it only matters if the clip has been resized from the right, but this
 	// checks if it has been resized from either direction.
 	if (getAutoResize())
 	{
+		if (m_steps > 0)
+		{
+			changeLength(TimePos(m_steps * TimePos::ticksPerBar() / TimePos::stepsPerBar()));
+			return;
+		}
 		if (m_autoTrack != nullptr && m_autoTrack->trackContainer() == Engine::patternStore())
 		{
 			// If inside a pattern, the clip is always the length of it.
@@ -752,6 +770,10 @@ void AutomationClip::saveSettings( QDomDocument & _doc, QDomElement & _this )
 	_this.setAttribute( "mute", QString::number( isMuted() ) );
 	_this.setAttribute("off", startTimeOffset());
 	_this.setAttribute("autoresize", QString::number(getAutoResize()));
+	if (m_steps > 0)
+	{
+		_this.setAttribute("steps", QString::number(m_steps));
+	}
 
 	if (const auto& c = color())
 	{
@@ -804,6 +826,10 @@ void AutomationClip::loadSettings( const QDomElement & _this )
 	setMuted(_this.attribute( "mute", QString::number( false ) ).toInt() );
 	setAutoResize(_this.attribute("autoresize", "1").toInt());
 	setStartTimeOffset(_this.attribute("off").toInt());
+	if (_this.hasAttribute("steps"))
+	{
+		setSteps(_this.attribute("steps").toInt());
+	}
 
 	for( QDomNode node = _this.firstChild(); !node.isNull();
 						node = node.nextSibling() )

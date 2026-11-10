@@ -145,7 +145,13 @@ public:
 	const TempoSyncKnobModel& getLfoSpeedModel() const { return m_lfoSpeedModel; }
 	const BoolModel& getX100Model() const { return m_x100Model; }
 	const IntModel& getLfoWaveModel() const { return m_lfoWaveModel; }
+	IntModel& getLfoWaveModel() { return m_lfoWaveModel; }
 	std::shared_ptr<const SampleBuffer> getLfoUserWave() const { return m_userWave; }
+	void setUserWave( std::shared_ptr<const SampleBuffer> wave )
+	{
+		m_userWave = wave;
+		updateSampleVars();
+	}
 
 public slots:
 	void updateSampleVars();

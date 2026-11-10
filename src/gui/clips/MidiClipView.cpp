@@ -246,6 +246,22 @@ void MidiClipView::constructContextMenu( QMenu * _cm )
 	if (!isBeat)
 	{
 		_cm->addAction(embed::getIconPixmap("scale"), tr("Transpose"), this, &MidiClipView::transposeSelection);
+		_cm->addAction(embed::getIconPixmap("arp_up_and_down"), tr("Flip horizontally (Retrograde) [X]"), [this]() {
+			if (m_clip)
+			{
+				auto pRoll = getGUI()->pianoRoll();
+				pRoll->setCurrentMidiClip(m_clip);
+				pRoll->flipHorizontally();
+			}
+		});
+		_cm->addAction(embed::getIconPixmap("arp_down"), tr("Invert vertically (Inversion) [Y]"), [this]() {
+			if (m_clip)
+			{
+				auto pRoll = getGUI()->pianoRoll();
+				pRoll->setCurrentMidiClip(m_clip);
+				pRoll->invertVertically();
+			}
+		});
 	}
 	_cm->addSeparator();
 

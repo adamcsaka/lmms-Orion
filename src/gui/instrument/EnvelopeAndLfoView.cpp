@@ -272,8 +272,8 @@ void EnvelopeAndLfoView::lfoUserWaveChanged()
 		if (m_params->m_userWave->size() <= 1)
 		{
 			TextFloat::displayMessage( tr( "Hint" ),
-				tr( "Drag and drop a sample into this window." ),
-					embed::getIconPixmap( "hint" ), 3000 );
+				tr( "Drag & drop a sample or right-click the LFO graph to generate waveforms." ),
+					embed::getIconPixmap( "hint" ), 3500 );
 		}
 	}
 }
