@@ -768,7 +768,7 @@ bool InstrumentTrack::play( const TimePos & _start, const f_cnt_t _frames,
 		{
 			const float songBpm = (Engine::getSong() != nullptr) ? Engine::getSong()->getTempo() : 120.0f;
 			const float ratio = static_cast<float>(m_bpmModel.value()) / (songBpm > 0.0f ? songBpm : 120.0f);
-			inst_frames_per_tick = Engine::audioEngine()->outputSampleRate() * 60.0f / ( m_bpmModel.value() * TimePos::ticksPerBeat() );
+			inst_frames_per_tick = Engine::audioEngine()->outputSampleRate() * 60.0f * 4 / DefaultTicksPerBar / m_bpmModel.value();
 
 			tick_t raw_from = static_cast<tick_t>(std::round((cur_start.getTicks() - 1) * ratio));
 			tick_t raw_to = static_cast<tick_t>(std::round(cur_start.getTicks() * ratio));
@@ -848,7 +848,7 @@ bool InstrumentTrack::play( const TimePos & _start, const f_cnt_t _frames,
 			// plays for the whole length of the sample
 			const auto noteFrames = currentNote->type() == Note::Type::Step
 				? 0
-				: (currentNote->endPos() - (hasCustomBpm ? currentNote->pos() : cur_start.getTicks()) - noteOverlap) * inst_frames_per_tick;
+				: (currentNote->endPos().getTicks() - (hasCustomBpm ? currentNote->pos().getTicks() : cur_start.getTicks()) - noteOverlap) * inst_frames_per_tick;
 
 			NotePlayHandle* notePlayHandle = NotePlayHandleManager::acquire(this, _offset, noteFrames, *currentNote);
 			notePlayHandle->setPatternTrack(pattern_track);
