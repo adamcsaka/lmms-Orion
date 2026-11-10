@@ -313,7 +313,7 @@ void EffectRackView::pasteEffect()
 		{
 			const QString name = effectData.attribute( "name" );
 			EffectKey key( effectData.elementsByTagName( "key" ).item( 0 ).toElement() );
-			Effect* e = Effect::instantiate( name.toUtf8(), fxChain(), &key );
+			Effect* e = Effect::instantiate( name, fxChain(), &key );
 			if (e != nullptr && e->isOkay())
 			{
 				e->restoreState( effectData );
