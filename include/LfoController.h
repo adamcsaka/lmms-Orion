@@ -32,6 +32,8 @@
 #include "SampleBuffer.h"
 #include "TempoSyncKnobModel.h"
 
+class QPushButton;
+
 namespace lmms
 {
 
@@ -42,7 +44,6 @@ class AutomatableButtonGroup;
 class PixmapButton;
 class Knob;
 class TempoSyncKnob;
-class QPushButton;
 
 class LfoControllerDialog;
 
