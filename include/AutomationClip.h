@@ -227,6 +227,9 @@ public:
 	bool isRecording() const { return m_isRecording; }
 	void setRecording( const bool b ) { m_isRecording = b; }
 
+	int steps() const { return m_steps; }
+	void setSteps( int steps );
+
 	static int quantization() { return s_quantization; }
 	static void setQuantization(int q) { s_quantization = q; }
 
@@ -283,6 +286,7 @@ private:
 	float m_dragOutTan; // The dragged node's outTangent
 
 	bool m_isRecording;
+	int m_steps;
 	float m_lastRecordedValue;
 
 	static int s_quantization;

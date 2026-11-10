@@ -1388,7 +1388,7 @@ void PianoRoll::keyPressEvent(QKeyEvent* ke)
 		}
 	}
 
-	if( hasValidMidiClip() && ke->modifiers() == Qt::NoModifier )
+	if( m_typingKeyboardEnabled && hasValidMidiClip() && ke->modifiers() == Qt::NoModifier )
 	{
 		const int key_num = PianoView::getKeyFromKeyEvent( ke );
 
@@ -1560,7 +1560,7 @@ void PianoRoll::keyPressEvent(QKeyEvent* ke)
 			break;
 
 		case Qt::Key_X:
-			if (hasValidMidiClip() && m_action == Action::None && (ke->modifiers() == Qt::NoModifier || ke->modifiers() == Qt::ShiftModifier))
+			if (hasValidMidiClip() && m_action == Action::None && (ke->modifiers() == Qt::NoModifier || ke->modifiers() == Qt::ShiftModifier || ke->modifiers() == Qt::AltModifier))
 			{
 				flipHorizontally();
 				ke->accept();
@@ -1569,7 +1569,8 @@ void PianoRoll::keyPressEvent(QKeyEvent* ke)
 			break;
 
 		case Qt::Key_Y:
-			if (hasValidMidiClip() && m_action == Action::None && (ke->modifiers() == Qt::NoModifier || ke->modifiers() == Qt::ShiftModifier))
+		case Qt::Key_Z:
+			if (hasValidMidiClip() && m_action == Action::None && (ke->modifiers() == Qt::NoModifier || ke->modifiers() == Qt::ShiftModifier || ke->modifiers() == Qt::AltModifier))
 			{
 				invertVertically();
 				ke->accept();
@@ -1644,7 +1645,7 @@ void PianoRoll::keyPressEvent(QKeyEvent* ke)
 
 void PianoRoll::keyReleaseEvent(QKeyEvent* ke )
 {
-	if( hasValidMidiClip() && ke->modifiers() == Qt::NoModifier )
+	if( m_typingKeyboardEnabled && hasValidMidiClip() && ke->modifiers() == Qt::NoModifier )
 	{
 		const int key_num = PianoView::getKeyFromKeyEvent( ke );
 		if (!ke->isAutoRepeat() && key_num > -1)
@@ -5316,6 +5317,15 @@ PianoRollWindow::PianoRollWindow() :
 	notesActionsToolBar->addSeparator();
 	notesActionsToolBar->addWidget(quantizeButton);
 
+	auto toggleKeyboardAction = notesActionsToolBar->addAction(
+		embed::getIconPixmap("piano"),
+		tr("Toggle computer keyboard note input (disable to use single-key shortcuts like X, Y)"));
+	toggleKeyboardAction->setCheckable(true);
+	toggleKeyboardAction->setChecked(m_editor->isTypingKeyboardEnabled());
+	connect(toggleKeyboardAction, &QAction::toggled, [this](bool checked) {
+		m_editor->setTypingKeyboardEnabled(checked);
+	});
+
 	// -- File actions
 	DropToolBar* fileActionsToolBar = addDropToolBarToTop(tr("File actions"));
 
@@ -5397,6 +5407,12 @@ PianoRollWindow::PianoRollWindow() :
 	connect(reverseAction, &QAction::triggered, [this](){ m_editor->reverseNotes(); });
 	reverseAction->setShortcut(keySequence(Qt::SHIFT, Qt::Key_R));
 
+	auto flipHorizAction = new QAction(embed::getIconPixmap("flip_x"), tr("Flip Horizontally (Retrograde) (X)"), noteToolsButton);
+	connect(flipHorizAction, &QAction::triggered, [this](){ m_editor->flipHorizontally(); });
+
+	auto flipVertAction = new QAction(embed::getIconPixmap("flip_y"), tr("Flip Vertically (Invert) (Y)"), noteToolsButton);
+	connect(flipVertAction, &QAction::triggered, [this](){ m_editor->invertVertically(); });
+
 	noteToolsButton->addAction(glueAction);
 	noteToolsButton->addAction(knifeAction);
 	noteToolsButton->addAction(strumAction);
@@ -5405,6 +5421,8 @@ PianoRollWindow::PianoRollWindow() :
 	noteToolsButton->addAction(minLengthAction);
 	noteToolsButton->addAction(maxLengthAction);
 	noteToolsButton->addAction(reverseAction);
+	noteToolsButton->addAction(flipHorizAction);
+	noteToolsButton->addAction(flipVertAction);
 
 	notesActionsToolBar->addWidget(noteToolsButton);
 

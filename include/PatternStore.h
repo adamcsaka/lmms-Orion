@@ -92,6 +92,10 @@ public:
 	void fixIncorrectPositions();
 	void createClipsForPattern(int pattern);
 
+	bool isRecordingAutomation() const { return m_recordAutomation; }
+	void setRecordingAutomation(bool record) { m_recordAutomation = record; }
+	void handleLiveAutomation(class AutomatableModel* model);
+
 	AutomatedValueMap automatedValuesAt(TimePos time, int clipNum) const override;
 
 public slots:
@@ -104,6 +108,7 @@ signals:
 
 private:
 	ComboBoxModel m_patternComboBoxModel;
+	bool m_recordAutomation = false;
 
 
 	// Where the pattern selection combo box is

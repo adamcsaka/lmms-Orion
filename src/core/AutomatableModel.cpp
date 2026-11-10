@@ -32,6 +32,7 @@
 #include "AutomationClip.h"
 #include "ControllerConnection.h"
 #include "LocaleHelper.h"
+#include "PatternStore.h"
 #include "ProjectJournal.h"
 #include "Song.h"
 
@@ -300,7 +301,14 @@ void AutomatableModel::setValue(const float value, const bool isAutomated)
 		return;
 	}
 
-	if (!isAutomated) { addJournalCheckPoint(); }
+	if (!isAutomated)
+	{
+		addJournalCheckPoint();
+		if (Engine::patternStore() && Engine::patternStore()->isRecordingAutomation())
+		{
+			Engine::patternStore()->handleLiveAutomation(this);
+		}
+	}
 
 	// set value for this and the other linked models
 	setValueInternal(value);

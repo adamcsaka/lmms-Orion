@@ -224,6 +224,17 @@ InstrumentTrackWindow::InstrumentTrackWindow( InstrumentTrackView * _itv ) :
 	basicControlsLayout->addWidget( m_midiGroupLabel, 1, 8 );
 	basicControlsLayout->setAlignment( m_midiGroupLabel, labelAlignment );
 
+	// setup spinbox for Track BPM
+	m_bpmNumber = new LcdSpinBox( 3, nullptr, tr( "Track BPM (-- for song BPM)" ) );
+	m_bpmNumber->addTextForValue( 0, "--" );
+	basicControlsLayout->addWidget( m_bpmNumber, 0, 9 );
+	basicControlsLayout->setAlignment( m_bpmNumber, widgetAlignment );
+
+	m_bpmLabel = new QLabel( tr( "BPM" ), this );
+	m_bpmLabel->setStyleSheet( labelStyleSheet );
+	basicControlsLayout->addWidget( m_bpmLabel, 1, 9 );
+	basicControlsLayout->setAlignment( m_bpmLabel, labelAlignment );
+
 	auto saveSettingsBtn = new QPushButton(embed::getIconPixmap("project_save"), QString());
 	saveSettingsBtn->setMinimumSize( 32, 32 );
 
@@ -231,11 +242,11 @@ InstrumentTrackWindow::InstrumentTrackWindow( InstrumentTrackView * _itv ) :
 
 	saveSettingsBtn->setToolTip(tr("Save current instrument track settings in a preset file"));
 
-	basicControlsLayout->addWidget(saveSettingsBtn, 0, 9);
+	basicControlsLayout->addWidget(saveSettingsBtn, 0, 10);
 
 	label = new QLabel( tr( "SAVE" ), this );
 	label->setStyleSheet( labelStyleSheet );
-	basicControlsLayout->addWidget(label, 1, 9);
+	basicControlsLayout->addWidget(label, 1, 10);
 	basicControlsLayout->setAlignment( label, labelAlignment );
 
 	generalSettingsLayout->addLayout( basicControlsLayout );
@@ -364,6 +375,7 @@ void InstrumentTrackWindow::modelChanged()
 	m_panningKnob->setModel( &m_track->m_panningModel );
 	m_mixerChannelNumber->setModel( &m_track->m_mixerChannelModel );
 	m_midiGroupNumber->setModel( m_track->midiGroupModel() );
+	m_bpmNumber->setModel( m_track->bpmModel() );
 	m_pianoView->setModel( &m_track->m_piano );
 
 	if (m_track->instrument() && m_track->instrument()->isBendable())

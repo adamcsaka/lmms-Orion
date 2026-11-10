@@ -42,6 +42,7 @@ class AutomatableButtonGroup;
 class PixmapButton;
 class Knob;
 class TempoSyncKnob;
+class QPushButton;
 
 class LfoControllerDialog;
 
@@ -60,6 +61,11 @@ public:
 	void loadSettings( const QDomElement & _this ) override;
 	QString nodeName() const override;
 
+	BoolModel* freeRunModel() { return &m_freeRunModel; }
+	const BoolModel* freeRunModel() const { return &m_freeRunModel; }
+	void setCustomWave(const std::vector<float>& samples);
+	std::shared_ptr<const SampleBuffer> userDefSampleBuffer() const { return m_userDefSampleBuffer; }
+
 
 public slots:
 	gui::ControllerDialog * createDialog( QWidget * _parent ) override;
@@ -75,6 +81,7 @@ protected:
 	FloatModel m_phaseModel;
 	IntModel m_waveModel;
 	IntModel m_multiplierModel;
+	BoolModel m_freeRunModel;
 
 	float m_duration;
 	float m_phaseOffset;
@@ -119,6 +126,8 @@ protected:
 	PixmapButton * m_userLfoBtn;
 	AutomatableButtonGroup * m_waveBtnGrp;
 	AutomatableButtonGroup * m_multiplierBtnGrp;
+	QPushButton * m_freeRunBtn;
+	QPushButton * m_drawWaveBtn;
 
 
 private:
@@ -126,6 +135,7 @@ private:
 
 private slots:
 	void askUserDefWave();
+	void openWaveDrawer();
 
 } ;
 

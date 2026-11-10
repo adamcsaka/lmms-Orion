@@ -24,6 +24,7 @@
 #include "AutomationClipView.h"
 
 #include <QApplication>
+#include <QInputDialog>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>  // IWYU pragma: keep
@@ -138,6 +139,23 @@ void AutomationClipView::toggleRecording()
 }
 
 
+void AutomationClipView::changeStepCount()
+{
+	if (!m_clip) { return; }
+	bool ok = false;
+	int curSteps = m_clip->steps() > 0 ? m_clip->steps() : (m_clip->length().getTicks() * TimePos::stepsPerBar() / TimePos::ticksPerBar());
+	if (curSteps < 1) curSteps = 16;
+	int newSteps = QInputDialog::getInt(
+		this, tr("Set track steps"),
+		tr("Number of steps for this automation track (e.g. 12 for 3/4, 7 for 7/8):"),
+		curSteps, 1, 1024, 1, &ok );
+	if (ok)
+	{
+		m_clip->setSteps(newSteps);
+	}
+}
+
+
 
 
 void AutomationClipView::flipY()
@@ -179,6 +197,9 @@ void AutomationClipView::constructContextMenu( QMenu * _cm )
 	_cm->addAction( embed::getIconPixmap( "record" ),
 						tr( "Set/clear record" ),
 						this, SLOT(toggleRecording()));
+	_cm->addAction( embed::getIconPixmap( "settings" ),
+						tr( "Set track step count..." ),
+						this, SLOT(changeStepCount()));
 	_cm->addAction( embed::getIconPixmap( "flip_y" ),
 						tr( "Flip Vertically (Visible)" ),
 						this, SLOT(flipY()));

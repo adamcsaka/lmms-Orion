@@ -150,6 +150,16 @@ public:
 	{
 		return m_midiClip != nullptr;
 	}
+
+	bool isTypingKeyboardEnabled() const
+	{
+		return m_typingKeyboardEnabled;
+	}
+
+	void setTypingKeyboardEnabled(bool enabled)
+	{
+		m_typingKeyboardEnabled = enabled;
+	}
 	
 	int trackOctaveSize() const;
 
@@ -517,6 +527,7 @@ private:
 
 	friend class PianoRollWindow;
 
+	bool m_typingKeyboardEnabled = false;
 	StepRecorderWidget m_stepRecorderWidget;
 	StepRecorder m_stepRecorder;
 

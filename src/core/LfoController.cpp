@@ -46,6 +46,7 @@ LfoController::LfoController( Model * _parent ) :
 	m_waveModel( static_cast<int>(Oscillator::WaveShape::Sine), 0, Oscillator::NumWaveShapes,
 			this, tr( "Oscillator waveform" ) ),
 	m_multiplierModel( 0, 0, 2, this, tr( "Frequency Multiplier" ) ),
+	m_freeRunModel( false, this, tr( "Free run (unsynced)" ) ),
 	m_duration( 1000 ),
 	m_phaseOffset( 0 ),
 	m_currentPhase( 0 ),
@@ -82,6 +83,7 @@ LfoController::~LfoController()
 	m_phaseModel.disconnect( this );
 	m_waveModel.disconnect( this );
 	m_multiplierModel.disconnect( this );
+	m_freeRunModel.disconnect( this );
 }
 
 
@@ -148,8 +150,11 @@ void LfoController::updateValueBuffer()
 
 void LfoController::updatePhase()
 {
-	m_currentPhase = ( Engine::getSong()->getFrames() ) / m_duration;
-	m_bufferLastUpdated = s_periods - 1;
+	if (!m_freeRunModel.value())
+	{
+		m_currentPhase = ( Engine::getSong()->getFrames() ) / m_duration;
+		m_bufferLastUpdated = s_periods - 1;
+	}
 }
 
 
@@ -213,6 +218,22 @@ void LfoController::updateSampleFunction()
 
 
 
+void LfoController::setCustomWave(const std::vector<float>& samples)
+{
+	std::vector<SampleFrame> frames;
+	frames.reserve(samples.size());
+	for (float s : samples)
+	{
+		frames.emplace_back(s, s);
+	}
+	m_userDefSampleBuffer = std::make_shared<SampleBuffer>(std::move(frames), Engine::audioEngine()->outputSampleRate(), "custom_draw");
+	m_waveModel.setValue(static_cast<int>(Oscillator::WaveShape::UserDefined));
+	updateSampleFunction();
+}
+
+
+
+
 void LfoController::saveSettings( QDomDocument & _doc, QDomElement & _this )
 {
 	Controller::saveSettings( _doc, _this );
@@ -223,7 +244,12 @@ void LfoController::saveSettings( QDomDocument & _doc, QDomElement & _this )
 	m_phaseModel.saveSettings( _doc, _this, "phase" );
 	m_waveModel.saveSettings( _doc, _this, "wave" );
 	m_multiplierModel.saveSettings( _doc, _this, "multiplier" );
+	m_freeRunModel.saveSettings( _doc, _this, "freerun" );
 	_this.setAttribute("userwavefile", m_userDefSampleBuffer->audioFile());
+	if (m_userDefSampleBuffer && !m_userDefSampleBuffer->empty())
+	{
+		_this.setAttribute("userwave_b64", m_userDefSampleBuffer->toBase64());
+	}
 }
 
 
@@ -238,6 +264,7 @@ void LfoController::loadSettings( const QDomElement & _this )
 	m_phaseModel.loadSettings( _this, "phase" );
 	m_waveModel.loadSettings( _this, "wave" );
 	m_multiplierModel.loadSettings( _this, "multiplier" );
+	m_freeRunModel.loadSettings( _this, "freerun" );
 
 	if (const auto userWaveFile = _this.attribute("userwavefile"); !userWaveFile.isEmpty())
 	{
@@ -246,6 +273,10 @@ void LfoController::loadSettings( const QDomElement & _this )
 			m_userDefSampleBuffer = SampleBuffer::fromFile(_this.attribute("userwavefile"));
 		}
 		else { Engine::getSong()->collectError(QString("%1: %2").arg(tr("Sample not found"), userWaveFile)); }
+	}
+	else if (_this.hasAttribute("userwave_b64"))
+	{
+		m_userDefSampleBuffer = SampleBuffer::fromBase64(_this.attribute("userwave_b64"));
 	}
 
 	updateSampleFunction();
