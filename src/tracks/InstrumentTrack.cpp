@@ -64,6 +64,7 @@ InstrumentTrack::InstrumentTrack(TrackContainer* tc) :
 	m_pitchModel(0, MinPitchDefault, MaxPitchDefault, 1, this, tr("Pitch")),
 	m_pitchRangeModel(1, 1, 60, this, tr("Pitch range")),
 	m_mixerChannelModel(0, 0, 0, this, tr("Mixer channel")),
+	m_midiGroupModel(0, 0, 16, this, tr("MIDI Group")),
 	m_useMasterPitchModel(true, this, tr("Master pitch")),
 	m_instrument(nullptr),
 	m_soundShaping(this),
@@ -310,6 +311,24 @@ void InstrumentTrack::processInEvent( const MidiEvent& event, const TimePos& tim
 	if (Engine::getSong()->isExporting() && event.source() == MidiEvent::Source::External)
 	{
 		return;
+	}
+
+	static thread_local bool s_inProcessInEventBroadcast = false;
+	if( m_midiGroupModel.value() > 0 && !s_inProcessInEventBroadcast && Engine::getSong() != nullptr )
+	{
+		s_inProcessInEventBroadcast = true;
+		for( Track* t : Engine::getSong()->tracks() )
+		{
+			if( t != this && t->type() == Track::Type::Instrument && !t->isMuted() )
+			{
+				auto it = static_cast<InstrumentTrack*>( t );
+				if( it->midiGroupModel()->value() == m_midiGroupModel.value() )
+				{
+					it->processInEvent( event, time, offset );
+				}
+			}
+		}
+		s_inProcessInEventBroadcast = false;
 	}
 
 	bool eventHandled = false;
@@ -792,6 +811,31 @@ bool InstrumentTrack::play( const TimePos & _start, const f_cnt_t _frames,
 			}
 
 			Engine::audioEngine()->addPlayHandle( notePlayHandle );
+
+			static thread_local bool s_inMidiGroupPlayBroadcast = false;
+			if( m_midiGroupModel.value() > 0 && !s_inMidiGroupPlayBroadcast && Engine::getSong() != nullptr )
+			{
+				s_inMidiGroupPlayBroadcast = true;
+				for( Track* t : Engine::getSong()->tracks() )
+				{
+					if( t != this && t->type() == Track::Type::Instrument && !t->isMuted() )
+					{
+						auto it = static_cast<InstrumentTrack*>( t );
+						if( it->midiGroupModel()->value() == m_midiGroupModel.value() && it->instrument() != nullptr )
+						{
+							NotePlayHandle* peerHandle = NotePlayHandleManager::acquire(it, _offset, noteFrames, *currentNote);
+							peerHandle->setPatternTrack(pattern_track);
+							if( _clip_num < 0 )
+							{
+								peerHandle->setSongGlobalParentOffset( c->startPosition() + c->startTimeOffset());
+							}
+							Engine::audioEngine()->addPlayHandle( peerHandle );
+						}
+					}
+				}
+				s_inMidiGroupPlayBroadcast = false;
+			}
+
 			played_a_note = true;
 			++nit;
 		}
@@ -829,6 +873,7 @@ void InstrumentTrack::saveTrackSpecificSettings(QDomDocument& doc, QDomElement& 
 	m_pitchRangeModel.saveSettings( doc, thisElement, "pitchrange" );
 
 	m_mixerChannelModel.saveSettings( doc, thisElement, "mixch" );
+	m_midiGroupModel.saveSettings( doc, thisElement, "midigroup" );
 	m_baseNoteModel.saveSettings( doc, thisElement, "basenote" );
 	m_firstKeyModel.saveSettings(doc, thisElement, "firstkey");
 	m_lastKeyModel.saveSettings(doc, thisElement, "lastkey");
@@ -901,6 +946,7 @@ void InstrumentTrack::loadTrackSpecificSettings( const QDomElement & thisElement
 	if ( !m_previewMode )
 	{
 		m_mixerChannelModel.loadSettings( thisElement, "mixch" );
+		m_midiGroupModel.loadSettings( thisElement, "midigroup" );
 	}
 	m_baseNoteModel.loadSettings( thisElement, "basenote" );
 	m_firstKeyModel.loadSettings(thisElement, "firstkey");

@@ -237,6 +237,16 @@ public:
 		return &m_mixerChannelModel;
 	}
 
+	IntModel * midiGroupModel()
+	{
+		return &m_midiGroupModel;
+	}
+
+	const IntModel * midiGroupModel() const
+	{
+		return &m_midiGroupModel;
+	}
+
 	BoolModel* useMasterPitchModel()
 	{
 		return &m_useMasterPitchModel;
@@ -316,6 +326,7 @@ private:
 	FloatModel m_pitchModel;
 	IntModel m_pitchRangeModel;
 	IntModel m_mixerChannelModel;
+	IntModel m_midiGroupModel;
 	BoolModel m_useMasterPitchModel;
 
 	Instrument * m_instrument;
