@@ -1298,17 +1298,17 @@ void PianoRoll::flipHorizontally(const NoteVector& notes)
 	if (notes.empty()) { return; }
 	m_midiClip->addJournalCheckPoint();
 
-	tick_t minPos = notes.front()->pos().ticks();
-	tick_t maxEnd = notes.front()->endPos().ticks();
+	tick_t minPos = notes.front()->pos().getTicks();
+	tick_t maxEnd = notes.front()->endPos().getTicks();
 	for (const Note* n : notes)
 	{
-		minPos = std::min(minPos, n->pos().ticks());
-		maxEnd = std::max(maxEnd, n->endPos().ticks());
+		minPos = std::min(minPos, n->pos().getTicks());
+		maxEnd = std::max(maxEnd, n->endPos().getTicks());
 	}
 
 	for (Note* n : notes)
 	{
-		tick_t newPos = minPos + (maxEnd - n->endPos().ticks());
+		tick_t newPos = minPos + (maxEnd - n->endPos().getTicks());
 		n->setPos(newPos);
 	}
 
