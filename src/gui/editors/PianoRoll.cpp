@@ -5615,6 +5615,22 @@ bool PianoRollWindow::isRecording() const
 
 
 
+void PianoRollWindow::flipHorizontally()
+{
+	if (m_editor) { m_editor->flipHorizontally(); }
+}
+
+
+
+
+void PianoRollWindow::invertVertically()
+{
+	if (m_editor) { m_editor->invertVertically(); }
+}
+
+
+
+
 int PianoRollWindow::quantization() const
 {
 	return m_editor->quantization();

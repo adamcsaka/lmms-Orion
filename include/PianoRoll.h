@@ -573,6 +573,9 @@ public:
 	void setCurrentMidiClip( MidiClip* clip );
 	void setGhostMidiClip( MidiClip* clip );
 
+	void flipHorizontally();
+	void invertVertically();
+
 	int quantization() const;
 
 	void play() override;
