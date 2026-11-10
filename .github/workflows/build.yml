@@ -441,13 +441,16 @@ jobs:
           cmake --build build --target package
           cmake --install build --prefix build\portable
           Compress-Archive -Path build\portable\* -DestinationPath build\lmms-win64-portable.zip
-      - name: Upload artifacts
+      - name: Upload installer
         uses: actions/upload-artifact@v7
         with:
-          archive: false
-          path: |
-            build/lmms-*.exe
-            build/lmms-win64-portable.zip
+          name: lmms-win64-installer
+          path: build\lmms-*.exe
+      - name: Upload portable zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: lmms-win64-portable
+          path: build\lmms-win64-portable.zip
       - name: Trim ccache and print statistics
         run: |
           ccache --cleanup
