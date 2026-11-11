@@ -25,6 +25,7 @@
 #include "PatternEditor.h"
 
 #include <QAction>
+#include <QActionGroup>
 #include <QVBoxLayout>
 
 #include "ClipView.h"
