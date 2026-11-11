@@ -31,6 +31,7 @@
 #include "PatternStore.h"
 #include "PatternTrackView.h"
 #include "PlayHandle.h"
+#include "Song.h"
 
 
 namespace lmms
