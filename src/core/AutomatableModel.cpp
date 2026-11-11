@@ -294,6 +294,11 @@ void AutomatableModel::loadSettings( const QDomElement& element, const QString& 
 
 void AutomatableModel::setValue(const float value, const bool isAutomated)
 {
+	if (isAutomated && m_isBeingManipulated)
+	{
+		return;
+	}
+
 	if (fittedValue(value) == m_value)
 	{
 		// TODO check why we need this signal, is there a better solution?

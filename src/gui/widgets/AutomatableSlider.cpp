@@ -73,6 +73,7 @@ void AutomatableSlider::mousePressEvent( QMouseEvent * _me )
 		AutomatableModel* thisModel = model();
 		if (thisModel)
 		{
+			thisModel->setIsBeingManipulated(true);
 			thisModel->addJournalCheckPoint();
 			thisModel->saveJournallingState(false);
 		}
@@ -94,6 +95,7 @@ void AutomatableSlider::mouseReleaseEvent( QMouseEvent * _me )
 	AutomatableModel* thisModel = model();
 	if (thisModel)
 	{
+		thisModel->setIsBeingManipulated(false);
 		thisModel->restoreJournallingState();
 	}
 

@@ -438,7 +438,7 @@ LfoControllerDialog::LfoControllerDialog( Controller * _model, QWidget * _parent
 	title.append( ")" );
 	setWindowTitle( title );
 	setWindowIcon( embed::getIconPixmap( "controller" ) );
-	setFixedSize( 285, 58 );
+	setFixedSize( 316, 58 );
 	
 	m_baseKnob = new Knob(KnobType::Bright26, tr("BASE"), SMALL_FONT_SIZE, this);
 	m_baseKnob->move( CD_LFO_BASE_CD_KNOB_X, CD_LFO_CD_KNOB_Y );
@@ -565,14 +565,14 @@ LfoControllerDialog::LfoControllerDialog( Controller * _model, QWidget * _parent
 	m_multiplierBtnGrp->addButton( d100 );
 
 	m_freeRunBtn = new QPushButton( tr("FREE"), this );
-	m_freeRunBtn->move( 228, 5 );
-	m_freeRunBtn->setFixedSize( 52, 22 );
+	m_freeRunBtn->move( 252, 5 );
+	m_freeRunBtn->setFixedSize( 54, 22 );
 	m_freeRunBtn->setCheckable( true );
 	m_freeRunBtn->setToolTip( tr("Free run mode: oscillate continuously without sync to playback") );
 
 	m_drawWaveBtn = new QPushButton( tr("DRAW"), this );
-	m_drawWaveBtn->move( 228, 30 );
-	m_drawWaveBtn->setFixedSize( 52, 22 );
+	m_drawWaveBtn->move( 252, 30 );
+	m_drawWaveBtn->setFixedSize( 54, 22 );
 	m_drawWaveBtn->setToolTip( tr("Draw custom LFO waveform shape") );
 
 	connect( m_drawWaveBtn, &QPushButton::clicked, this, &LfoControllerDialog::openWaveDrawer );

@@ -242,6 +242,8 @@ public:
 
 public slots:
 	void clear();
+	void duplicateContent();
+	void scaleContent( float percentage );
 	void objectDestroyed( lmms::jo_id_t );
 	void flipY( int min, int max );
 	void flipY();

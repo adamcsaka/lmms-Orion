@@ -1073,6 +1073,59 @@ void AutomationClip::clear()
 }
 
 
+void AutomationClip::duplicateContent()
+{
+	QMutexLocker m(&m_clipMutex);
+	const tick_t currentLen = length().getTicks();
+	if (currentLen <= 0 || m_timeMap.isEmpty())
+	{
+		return;
+	}
+
+	timeMap newMap = m_timeMap;
+	for (auto it = m_timeMap.begin(); it != m_timeMap.end(); ++it)
+	{
+		const TimePos newPos = it.key() + currentLen;
+		AutomationNode node = it.value();
+		node.setPos(newPos);
+		newMap[newPos] = node;
+	}
+	m_timeMap = std::move(newMap);
+
+	if (m_steps > 0)
+	{
+		m_steps *= 2;
+	}
+	changeLength(TimePos(currentLen * 2));
+	emit dataChanged();
+}
+
+
+void AutomationClip::scaleContent(float percentage)
+{
+	if (percentage <= 0.0f) { return; }
+	const float ratio = percentage / 100.0f;
+	QMutexLocker m(&m_clipMutex);
+
+	timeMap newMap;
+	for (auto it = m_timeMap.begin(); it != m_timeMap.end(); ++it)
+	{
+		const TimePos newPos(static_cast<tick_t>(std::round(it.key().getTicks() * ratio)));
+		AutomationNode node = it.value();
+		node.setPos(newPos);
+		newMap[newPos] = node;
+	}
+	m_timeMap = std::move(newMap);
+
+	if (m_steps > 0)
+	{
+		m_steps = std::max(1, static_cast<int>(std::round(m_steps * ratio)));
+	}
+	changeLength(TimePos(std::max(1, static_cast<int>(std::round(length().getTicks() * ratio)))));
+	emit dataChanged();
+}
+
+
 
 
 void AutomationClip::objectDestroyed( jo_id_t _id )

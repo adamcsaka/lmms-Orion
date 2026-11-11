@@ -152,8 +152,6 @@ private:
 	MixerChannelLcdSpinBox * m_mixerChannelNumber;
 	LcdSpinBox * m_midiGroupNumber;
 	QLabel * m_midiGroupLabel;
-	LcdSpinBox * m_bpmNumber;
-	QLabel * m_bpmLabel;
 
 
 

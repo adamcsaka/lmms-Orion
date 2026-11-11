@@ -332,6 +332,31 @@ PatternEditorWindow::PatternEditorWindow(PatternStore* ps) :
 		ps->setRecordingAutomation(checked);
 	});
 
+	auto recordMenu = new QMenu(m_toolBar);
+	auto touchAction = recordMenu->addAction(tr("Touch mode (Auto-disarm after 4s idle)"));
+	touchAction->setCheckable(true);
+	touchAction->setChecked(ps->recordMode() == PatternStore::RecordMode::Touch);
+	auto writeAction = recordMenu->addAction(tr("Write mode (Continuous recording)"));
+	writeAction->setCheckable(true);
+	writeAction->setChecked(ps->recordMode() == PatternStore::RecordMode::Write);
+	auto modeGroup = new QActionGroup(recordMenu);
+	modeGroup->addAction(touchAction);
+	modeGroup->addAction(writeAction);
+	connect(touchAction, &QAction::triggered, [ps]() {
+		ps->setRecordMode(PatternStore::RecordMode::Touch);
+	});
+	connect(writeAction, &QAction::triggered, [ps]() {
+		ps->setRecordMode(PatternStore::RecordMode::Write);
+	});
+	recordAutomationAction->setMenu(recordMenu);
+
+	connect(ps, &PatternStore::recordingAutomationChanged, recordAutomationAction, [recordAutomationAction](bool rec) {
+		if (recordAutomationAction->isChecked() != rec)
+		{
+			recordAutomationAction->setChecked(rec);
+		}
+	});
+
 	auto stretch = new QWidget(m_toolBar);
 	stretch->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 	trackAndStepActionsToolBar->addWidget(stretch);

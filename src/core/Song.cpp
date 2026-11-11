@@ -73,7 +73,7 @@ Song::Song() :
 	m_timeSigModel( this ),
 	m_oldTicksPerBar( DefaultTicksPerBar ),
 	m_masterVolumeModel( 100, 0, 200, this, tr( "Master volume" ) ),
-	m_masterPitchModel( 0, -12, 12, this, tr( "Master pitch" ) ),
+	m_masterPitchModel( 0.0f, -24.0f, 24.0f, 0.001f, this, tr( "Master pitch" ) ),
 	m_nLoadingTrack( 0 ),
 	m_fileName(),
 	m_oldFileName(),
@@ -109,6 +109,7 @@ Song::Song() :
 
 	connect( &m_masterVolumeModel, SIGNAL(dataChanged()),
 			this, SLOT(masterVolumeChanged()), Qt::DirectConnection );
+	m_masterPitchModel.setStrictStepSize(false);
 /*	connect( &m_masterPitchModel, SIGNAL(dataChanged()),
 			this, SLOT(masterPitchChanged()));*/
 
@@ -955,6 +956,7 @@ void Song::createNewProject()
 	}
 
 	m_loadingProject = true;
+	m_patternStoreRestored = false;
 
 	clearProject();
 
@@ -1017,6 +1019,7 @@ void Song::loadProject( const QString & fileName )
 	QDomNode node;
 
 	m_loadingProject = true;
+	m_patternStoreRestored = false;
 
 	Engine::projectJournal()->setJournalling( false );
 
@@ -1125,6 +1128,16 @@ void Song::loadProject( const QString & fileName )
 			if( node.nodeName() == "trackcontainer" )
 			{
 				( (JournallingObject *)( this ) )->restoreState( node.toElement() );
+			}
+			else if (node.nodeName() == "patternstore" && !m_patternStoreRestored)
+			{
+				QDomNode tcNode = node.namedItem(TrackContainer::classNodeName());
+				if (tcNode.isElement())
+				{
+					Engine::patternStore()->clearAllTracks();
+					Engine::patternStore()->restoreState(tcNode.toElement());
+					m_patternStoreRestored = true;
+				}
 			}
 			else if( node.nodeName() == "controllers" )
 			{
@@ -1237,6 +1250,11 @@ bool Song::saveProjectFile(const QString & filename, bool withResources)
 	m_masterPitchModel.saveSettings( dataFile, dataFile.head(), "masterpitch" );
 
 	saveState( dataFile, dataFile.content() );
+
+	// Always save PatternStore so pattern editor tracks & patterns are never lost
+	QDomElement patternStoreElement = dataFile.createElement("patternstore");
+	dataFile.content().appendChild(patternStoreElement);
+	Engine::patternStore()->saveState(dataFile, patternStoreElement);
 
 	Engine::mixer()->saveState( dataFile, dataFile.content() );
 	if( getGUI() != nullptr )
@@ -1409,7 +1427,7 @@ void Song::exportProjectMidi(const std::filesystem::path& filePath) const
 	ExportFilter *exf = dynamic_cast<ExportFilter *> (Plugin::instantiate("midiexport", nullptr, nullptr));
 	if (exf)
 	{
-		exf->tryExport(tracks, patternStoreTracks, getTempo(), m_masterPitchModel.value(), filePath);
+		exf->tryExport(tracks, patternStoreTracks, getTempo(), static_cast<int>(std::round(m_masterPitchModel.value())), filePath);
 	}
 	else
 	{

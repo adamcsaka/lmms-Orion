@@ -83,6 +83,8 @@ protected slots:
 	void changeName();
 	void transposeSelection();
 	void clearNotesOutOfBounds();
+	void duplicateClipContent();
+	void scaleClipContent();
 
 
 protected:

@@ -61,6 +61,8 @@ protected slots:
 	void changeStepCount();
 	void flipY();
 	void flipX();
+	void duplicateClipContent();
+	void scaleClipContent();
 
 protected:
 	void constructContextMenu( QMenu * ) override;

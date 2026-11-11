@@ -40,6 +40,7 @@
 #include <QPointer>
 #include <QPushButton>
 #include <QScrollBar>
+#include <QSpinBox>
 #include <QStyleOption>
 #include <QToolButton>
 
@@ -5574,6 +5575,28 @@ PianoRollWindow::PianoRollWindow() :
 	zoomAndNotesToolBar->addSeparator();
 	zoomAndNotesToolBar->addWidget(snapWidget);
 
+	zoomAndNotesToolBar->addSeparator();
+	auto stepsWidget = new QWidget(m_toolBar);
+	auto stepsHbox = new QHBoxLayout(stepsWidget);
+	stepsHbox->setContentsMargins(0, 0, 0, 0);
+	stepsHbox->setSpacing(2);
+	auto stepsLbl = new QLabel(tr("Steps:"), stepsWidget);
+	m_stepsSpinBox = new QSpinBox(stepsWidget);
+	m_stepsSpinBox->setRange(1, 1024);
+	m_stepsSpinBox->setValue(16);
+	m_stepsSpinBox->setToolTip(tr("Pattern step count for current clip"));
+	stepsHbox->addWidget(stepsLbl);
+	stepsHbox->addWidget(m_stepsSpinBox);
+	stepsWidget->setLayout(stepsHbox);
+	zoomAndNotesToolBar->addWidget(stepsWidget);
+
+	connect(m_stepsSpinBox, qOverload<int>(&QSpinBox::valueChanged), this, [this](int steps) {
+		if (m_editor->hasValidMidiClip() && m_editor->currentMidiClip()->steps() != steps)
+		{
+			const_cast<MidiClip*>(m_editor->currentMidiClip())->setSteps(steps);
+		}
+	});
+
 	// setup our actual window
 	setFocusPolicy( Qt::StrongFocus );
 	setFocus();
@@ -5861,6 +5884,20 @@ void PianoRollWindow::updateAfterMidiClipChange()
 {
 	setEnabled(m_editor->hasValidMidiClip());
 	m_editor->m_timeLine->setVisible(m_editor->hasValidMidiClip());
+
+	if (m_stepsSpinBox)
+	{
+		if (m_editor->hasValidMidiClip())
+		{
+			QSignalBlocker blocker(m_stepsSpinBox);
+			m_stepsSpinBox->setEnabled(true);
+			m_stepsSpinBox->setValue(m_editor->currentMidiClip()->steps());
+		}
+		else
+		{
+			m_stepsSpinBox->setEnabled(false);
+		}
+	}
 
 	clipRenamed();
 	updateStepRecordingIcon(); //MIDI clip change turn step recording OFF - update icon accordingly

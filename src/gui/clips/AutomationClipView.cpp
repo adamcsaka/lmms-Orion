@@ -173,6 +173,27 @@ void AutomationClipView::flipX()
 	update();
 }
 
+void AutomationClipView::duplicateClipContent()
+{
+	if (m_clip)
+	{
+		m_clip->duplicateContent();
+		update();
+	}
+}
+
+void AutomationClipView::scaleClipContent()
+{
+	if (!m_clip) { return; }
+	bool ok = false;
+	double pct = QInputDialog::getDouble(this, tr("Scale Clip Content"), tr("Scale percentage:"), 100.0, 1.0, 1000.0, 1, &ok);
+	if (ok && pct > 0.0)
+	{
+		m_clip->scaleContent(static_cast<float>(pct));
+		update();
+	}
+}
+
 
 
 
@@ -206,6 +227,8 @@ void AutomationClipView::constructContextMenu( QMenu * _cm )
 	_cm->addAction( embed::getIconPixmap( "flip_x" ),
 						tr( "Flip Horizontally (Visible)" ),
 						this, SLOT(flipX()));
+	_cm->addAction(embed::getIconPixmap("edit_copy"), tr("Duplicate Content (2x)"), this, SLOT(duplicateClipContent()));
+	_cm->addAction(embed::getIconPixmap("scale"), tr("Scale Content (%)"), this, SLOT(scaleClipContent()));
 	
 	if (!m_clip->m_objects.empty())
 	{

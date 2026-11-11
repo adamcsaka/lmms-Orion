@@ -61,11 +61,10 @@ InstrumentTrack::InstrumentTrack(TrackContainer* tc) :
 	m_volumeModel(DefaultVolume, MinVolume, MaxVolume, 0.1f, this, tr("Volume")),
 	m_panningModel(DefaultPanning, PanningLeft, PanningRight, 0.1f, this, tr("Panning")),
 	m_audioBusHandle(tr("unnamed_track"), true, &m_volumeModel, &m_panningModel, &m_mutedModel),
-	m_pitchModel(0, MinPitchDefault, MaxPitchDefault, 1, this, tr("Pitch")),
+	m_pitchModel(0, MinPitchDefault, MaxPitchDefault, 0.001f, this, tr("Pitch")),
 	m_pitchRangeModel(1, 1, 60, this, tr("Pitch range")),
 	m_mixerChannelModel(0, 0, 0, this, tr("Mixer channel")),
 	m_midiGroupModel(0, 0, 16, this, tr("MIDI Group")),
-	m_bpmModel(0, 0, 999, this, tr("Track BPM")),
 	m_useMasterPitchModel(true, this, tr("Master pitch")),
 	m_instrument(nullptr),
 	m_soundShaping(this),
@@ -75,7 +74,7 @@ InstrumentTrack::InstrumentTrack(TrackContainer* tc) :
 	m_microtuner()
 {
 	m_pitchModel.setCenterValue( 0 );
-	m_pitchModel.setStrictStepSize(true);
+	m_pitchModel.setStrictStepSize(false);
 	m_panningModel.setCenterValue( DefaultPanning );
 	m_baseNoteModel.setInitValue( DefaultKey );
 	m_firstKeyModel.setInitValue(0);
@@ -315,17 +314,23 @@ void InstrumentTrack::processInEvent( const MidiEvent& event, const TimePos& tim
 	}
 
 	static thread_local bool s_inProcessInEventBroadcast = false;
-	if( m_midiGroupModel.value() > 0 && !s_inProcessInEventBroadcast && Engine::getSong() != nullptr )
+	if( m_midiGroupModel.value() > 0 && !s_inProcessInEventBroadcast )
 	{
 		s_inProcessInEventBroadcast = true;
-		for( Track* t : Engine::getSong()->tracks() )
+		std::vector<TrackContainer*> containers;
+		if( Engine::getSong() ) { containers.push_back( Engine::getSong() ); }
+		if( Engine::patternStore() ) { containers.push_back( Engine::patternStore() ); }
+		for( auto tc : containers )
 		{
-			if( t != this && t->type() == Track::Type::Instrument && !t->isMuted() )
+			for( Track* t : tc->tracks() )
 			{
-				auto it = static_cast<InstrumentTrack*>( t );
-				if( it->midiGroupModel()->value() == m_midiGroupModel.value() )
+				if( t != this && t->type() == Track::Type::Instrument && !t->isMuted() )
 				{
-					it->processInEvent( event, time, offset );
+					auto it = static_cast<InstrumentTrack*>( t );
+					if( it->midiGroupModel()->value() == m_midiGroupModel.value() )
+					{
+						it->processInEvent( event, time, offset );
+					}
 				}
 			}
 		}
@@ -664,7 +669,7 @@ void InstrumentTrack::updatePitch()
 void InstrumentTrack::updatePitchRange()
 {
 	const int r = m_pitchRangeModel.value();
-	m_pitchModel.setRange( MinPitchDefault * r, MaxPitchDefault * r );
+	m_pitchModel.setRange( MinPitchDefault * r, MaxPitchDefault * r, 0.001f );
 
 	processOutEvent( MidiEvent( MidiControlChange, midiPort()->realOutputChannel(),
 								MidiControllerRegisteredParameterNumberLSB, MidiPitchBendSensitivityRPN & 0x7F ) );
@@ -759,39 +764,10 @@ bool InstrumentTrack::play( const TimePos & _start, const f_cnt_t _frames,
 			cur_start -= c->startPosition() + c->startTimeOffset();
 		}
 
-		const bool hasCustomBpm = m_bpmModel.value() > 0;
-		float inst_frames_per_tick = frames_per_tick;
-		tick_t tick_from = cur_start.getTicks() - 1;
-		tick_t tick_to = cur_start.getTicks();
-
-		if ( hasCustomBpm )
+		// Independent loop length per track (Orion-style polyrhythms)
+		if ( c->length() > 0 && cur_start >= c->length() )
 		{
-			const float songBpm = (Engine::getSong() != nullptr) ? Engine::getSong()->getTempo() : 120.0f;
-			const float ratio = static_cast<float>(m_bpmModel.value()) / (songBpm > 0.0f ? songBpm : 120.0f);
-			inst_frames_per_tick = Engine::audioEngine()->outputSampleRate() * 60.0f * 4 / DefaultTicksPerBar / m_bpmModel.value();
-
-			tick_t raw_from = static_cast<tick_t>(std::round((cur_start.getTicks() - 1) * ratio));
-			tick_t raw_to = static_cast<tick_t>(std::round(cur_start.getTicks() * ratio));
-			if (cur_start.getTicks() <= 0) { raw_from = -1; raw_to = 0; }
-
-			if ( c->length() > 0 )
-			{
-				tick_from = raw_from % c->length().getTicks();
-				tick_to = raw_to % c->length().getTicks();
-			}
-			else
-			{
-				tick_from = raw_from;
-				tick_to = raw_to;
-			}
-		}
-		else
-		{
-			// Independent loop length per track (Orion-style polyrhythms)
-			if ( c->length() > 0 && cur_start >= c->length() )
-			{
-				cur_start = cur_start % c->length();
-			}
+			cur_start = cur_start % c->length();
 		}
 
 		// get all notes from the given clip...
@@ -802,7 +778,7 @@ bool InstrumentTrack::play( const TimePos & _start, const f_cnt_t _frames,
 		// very effective algorithm for playing notes that are
 		// posated within the current sample-frame
 
-		if( !hasCustomBpm && cur_start > 0 )
+		if( cur_start > 0 )
 		{
 			// skip notes which end before start-bar
 			while( nit != notes.end() && ( *nit )->endPos() < cur_start )
@@ -814,27 +790,8 @@ bool InstrumentTrack::play( const TimePos & _start, const f_cnt_t _frames,
 		while (nit != notes.end() && (*nit)->pos() < c->length() - c->startTimeOffset())
 		{
 			const auto currentNote = *nit;
-			bool shouldTrigger = false;
-			if ( hasCustomBpm )
-			{
-				if (tick_to >= tick_from)
-				{
-					shouldTrigger = (currentNote->pos() > tick_from && currentNote->pos() <= tick_to);
-				}
-				else
-				{
-					shouldTrigger = (currentNote->pos() > tick_from || currentNote->pos() <= tick_to);
-				}
-				if (cur_start.getTicks() == 0 && currentNote->pos() == 0)
-				{
-					shouldTrigger = true;
-				}
-			}
-			else
-			{
-				shouldTrigger = (currentNote->pos() == cur_start
-					|| (cur_start == -c->startTimeOffset() && (*nit)->pos() < cur_start && (*nit)->endPos() > cur_start));
-			}
+			const bool shouldTrigger = (currentNote->pos() == cur_start
+				|| (cur_start == -c->startTimeOffset() && (*nit)->pos() < cur_start && (*nit)->endPos() > cur_start));
 
 			if (!shouldTrigger)
 			{
@@ -848,7 +805,7 @@ bool InstrumentTrack::play( const TimePos & _start, const f_cnt_t _frames,
 			// plays for the whole length of the sample
 			const auto noteFrames = currentNote->type() == Note::Type::Step
 				? 0
-				: (currentNote->endPos().getTicks() - (hasCustomBpm ? currentNote->pos().getTicks() : cur_start.getTicks()) - noteOverlap) * inst_frames_per_tick;
+				: (currentNote->endPos().getTicks() - cur_start.getTicks() - noteOverlap) * frames_per_tick;
 
 			NotePlayHandle* notePlayHandle = NotePlayHandleManager::acquire(this, _offset, noteFrames, *currentNote);
 			notePlayHandle->setPatternTrack(pattern_track);
@@ -863,23 +820,29 @@ bool InstrumentTrack::play( const TimePos & _start, const f_cnt_t _frames,
 			Engine::audioEngine()->addPlayHandle( notePlayHandle );
 
 			static thread_local bool s_inMidiGroupPlayBroadcast = false;
-			if( m_midiGroupModel.value() > 0 && !s_inMidiGroupPlayBroadcast && Engine::getSong() != nullptr )
+			if( m_midiGroupModel.value() > 0 && !s_inMidiGroupPlayBroadcast )
 			{
 				s_inMidiGroupPlayBroadcast = true;
-				for( Track* t : Engine::getSong()->tracks() )
+				std::vector<TrackContainer*> containers;
+				if( Engine::getSong() ) { containers.push_back( Engine::getSong() ); }
+				if( Engine::patternStore() ) { containers.push_back( Engine::patternStore() ); }
+				for( auto tc : containers )
 				{
-					if( t != this && t->type() == Track::Type::Instrument && !t->isMuted() )
+					for( Track* t : tc->tracks() )
 					{
-						auto it = static_cast<InstrumentTrack*>( t );
-						if( it->midiGroupModel()->value() == m_midiGroupModel.value() && it->instrument() != nullptr )
+						if( t != this && t->type() == Track::Type::Instrument && !t->isMuted() )
 						{
-							NotePlayHandle* peerHandle = NotePlayHandleManager::acquire(it, _offset, noteFrames, *currentNote);
-							peerHandle->setPatternTrack(pattern_track);
-							if( _clip_num < 0 )
+							auto it = static_cast<InstrumentTrack*>( t );
+							if( it->midiGroupModel()->value() == m_midiGroupModel.value() && it->instrument() != nullptr )
 							{
-								peerHandle->setSongGlobalParentOffset( c->startPosition() + c->startTimeOffset());
+								NotePlayHandle* peerHandle = NotePlayHandleManager::acquire(it, _offset, noteFrames, *currentNote);
+								peerHandle->setPatternTrack(pattern_track);
+								if( _clip_num < 0 )
+								{
+									peerHandle->setSongGlobalParentOffset( c->startPosition() + c->startTimeOffset());
+								}
+								Engine::audioEngine()->addPlayHandle( peerHandle );
 							}
-							Engine::audioEngine()->addPlayHandle( peerHandle );
 						}
 					}
 				}
@@ -924,7 +887,6 @@ void InstrumentTrack::saveTrackSpecificSettings(QDomDocument& doc, QDomElement& 
 
 	m_mixerChannelModel.saveSettings( doc, thisElement, "mixch" );
 	m_midiGroupModel.saveSettings( doc, thisElement, "midigroup" );
-	m_bpmModel.saveSettings( doc, thisElement, "trackbpm" );
 	m_baseNoteModel.saveSettings( doc, thisElement, "basenote" );
 	m_firstKeyModel.saveSettings(doc, thisElement, "firstkey");
 	m_lastKeyModel.saveSettings(doc, thisElement, "lastkey");
@@ -998,7 +960,6 @@ void InstrumentTrack::loadTrackSpecificSettings( const QDomElement & thisElement
 	{
 		m_mixerChannelModel.loadSettings( thisElement, "mixch" );
 		m_midiGroupModel.loadSettings( thisElement, "midigroup" );
-		m_bpmModel.loadSettings( thisElement, "trackbpm" );
 	}
 	m_baseNoteModel.loadSettings( thisElement, "basenote" );
 	m_firstKeyModel.loadSettings(thisElement, "firstkey");
@@ -1041,19 +1002,27 @@ void InstrumentTrack::loadTrackSpecificSettings( const QDomElement & thisElement
 			else if(node.nodeName() == "instrument")
 			{
 				using PluginKey = Plugin::Descriptor::SubPluginFeatures::Key;
-				PluginKey key(node.toElement().elementsByTagName("key").item(0).toElement());
+				auto keyElem = node.toElement().elementsByTagName("key").item(0).toElement();
+				std::unique_ptr<PluginKey> key;
+				if (!keyElem.isNull())
+				{
+					key = std::make_unique<PluginKey>(keyElem);
+				}
 
 				if (reuseInstrument)
 				{
-					m_instrument->restoreState(node.firstChildElement());
+					if (m_instrument) { m_instrument->restoreState(node.firstChildElement()); }
 				}
 				else
 				{
 					delete m_instrument;
 					m_instrument = nullptr;
 					m_instrument = Instrument::instantiate(
-						node.toElement().attribute("name"), this, &key);
-					m_instrument->restoreState(node.firstChildElement());
+						node.toElement().attribute("name"), this, key.get());
+					if (m_instrument)
+					{
+						m_instrument->restoreState(node.firstChildElement());
+					}
 					emit instrumentChanged();
 				}
 			}

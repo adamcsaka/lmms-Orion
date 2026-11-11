@@ -26,6 +26,7 @@
 #define LMMS_PATTERN_STORE_H
 
 #include "TrackContainer.h"
+#include <QTimer>
 #include "ComboBoxModel.h"
 
 namespace lmms
@@ -92,8 +93,12 @@ public:
 	void fixIncorrectPositions();
 	void createClipsForPattern(int pattern);
 
+	enum class RecordMode { Touch, Write };
+	RecordMode recordMode() const { return m_recordMode; }
+	void setRecordMode(RecordMode mode) { m_recordMode = mode; }
+
 	bool isRecordingAutomation() const { return m_recordAutomation; }
-	void setRecordingAutomation(bool record) { m_recordAutomation = record; }
+	void setRecordingAutomation(bool record);
 	void handleLiveAutomation(class AutomatableModel* model);
 
 	AutomatedValueMap automatedValuesAt(TimePos time, int clipNum) const override;
@@ -105,10 +110,13 @@ public slots:
 
 signals:
 	void trackUpdated();
+	void recordingAutomationChanged(bool record);
 
 private:
 	ComboBoxModel m_patternComboBoxModel;
 	bool m_recordAutomation = false;
+	RecordMode m_recordMode = RecordMode::Touch;
+	QTimer m_automationIdleTimer;
 
 
 	// Where the pattern selection combo box is

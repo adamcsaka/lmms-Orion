@@ -67,7 +67,7 @@ class LMMS_EXPORT Song : public TrackContainer
 {
 	Q_OBJECT
 	mapPropertyFromModel( bpm_t,getTempo,setTempo,m_tempoModel );
-	mapPropertyFromModel( int,masterPitch,setMasterPitch,m_masterPitchModel );
+	mapPropertyFromModel( float,masterPitch,setMasterPitch,m_masterPitchModel );
 	mapPropertyFromModel( int,masterVolume,setMasterVolume, m_masterVolumeModel );
 public:
 	enum class PlayMode
@@ -259,6 +259,9 @@ public:
 		return m_fileName;
 	}
 
+	bool isPatternStoreRestored() const { return m_patternStoreRestored; }
+	void setPatternStoreRestored(bool r) { m_patternStoreRestored = r; }
+
 	bool isLoadingProject() const
 	{
 		return m_loadingProject;
@@ -412,7 +415,7 @@ private:
 	MeterModel m_timeSigModel;
 	int m_oldTicksPerBar;
 	IntModel m_masterVolumeModel;
-	IntModel m_masterPitchModel;
+	FloatModel m_masterPitchModel;
 
 	ControllerVector m_controllers;
 
@@ -460,6 +463,8 @@ private:
 	std::shared_ptr<Keymap> m_keymaps[MaxKeymapCount];
 
 	AutomatedValueMap m_oldAutomatedValues;
+
+	bool m_patternStoreRestored = false;
 
 	Metronome m_metronome;
 

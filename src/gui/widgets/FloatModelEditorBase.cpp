@@ -204,6 +204,7 @@ void FloatModelEditorBase::mousePressEvent(QMouseEvent * me)
 		AutomatableModel *thisModel = model();
 		if (thisModel)
 		{
+			thisModel->setIsBeingManipulated(true);
 			thisModel->addJournalCheckPoint();
 			thisModel->saveJournallingState(false);
 		}
@@ -255,6 +256,7 @@ void FloatModelEditorBase::mouseReleaseEvent(QMouseEvent* event)
 		AutomatableModel *thisModel = model();
 		if (thisModel)
 		{
+			thisModel->setIsBeingManipulated(false);
 			thisModel->restoreJournallingState();
 		}
 	}

@@ -245,10 +245,17 @@ void LfoController::saveSettings( QDomDocument & _doc, QDomElement & _this )
 	m_waveModel.saveSettings( _doc, _this, "wave" );
 	m_multiplierModel.saveSettings( _doc, _this, "multiplier" );
 	m_freeRunModel.saveSettings( _doc, _this, "freerun" );
-	_this.setAttribute("userwavefile", m_userDefSampleBuffer->audioFile());
 	if (m_userDefSampleBuffer && !m_userDefSampleBuffer->empty())
 	{
 		_this.setAttribute("userwave_b64", m_userDefSampleBuffer->toBase64());
+	}
+	if (m_userDefSampleBuffer && !m_userDefSampleBuffer->audioFile().isEmpty() && m_userDefSampleBuffer->audioFile() != "custom_draw")
+	{
+		_this.setAttribute("userwavefile", m_userDefSampleBuffer->audioFile());
+	}
+	else
+	{
+		_this.removeAttribute("userwavefile");
 	}
 }
 
@@ -266,17 +273,17 @@ void LfoController::loadSettings( const QDomElement & _this )
 	m_multiplierModel.loadSettings( _this, "multiplier" );
 	m_freeRunModel.loadSettings( _this, "freerun" );
 
-	if (const auto userWaveFile = _this.attribute("userwavefile"); !userWaveFile.isEmpty())
+	if (_this.hasAttribute("userwave_b64"))
+	{
+		m_userDefSampleBuffer = SampleBuffer::fromBase64(_this.attribute("userwave_b64"));
+	}
+	else if (const auto userWaveFile = _this.attribute("userwavefile"); !userWaveFile.isEmpty() && userWaveFile != "custom_draw")
 	{
 		if (QFileInfo(PathUtil::toAbsolute(userWaveFile)).exists())
 		{
 			m_userDefSampleBuffer = SampleBuffer::fromFile(_this.attribute("userwavefile"));
 		}
 		else { Engine::getSong()->collectError(QString("%1: %2").arg(tr("Sample not found"), userWaveFile)); }
-	}
-	else if (_this.hasAttribute("userwave_b64"))
-	{
-		m_userDefSampleBuffer = SampleBuffer::fromBase64(_this.attribute("userwave_b64"));
 	}
 
 	updateSampleFunction();

@@ -108,9 +108,9 @@ private slots:
 	void updateMasterVolumeFloat( int new_val );
 	void hideMasterVolumeFloat();
 
-	void setMasterPitch( int new_val );
+	void setMasterPitch( float new_val );
 	void showMasterPitchFloat();
-	void updateMasterPitchFloat( int new_val );
+	void updateMasterPitchFloat( float new_val );
 	void hideMasterPitchFloat();
 
 	void updateScrollBar(int len);

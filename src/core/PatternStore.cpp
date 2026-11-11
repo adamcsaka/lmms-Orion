@@ -43,6 +43,10 @@ PatternStore::PatternStore() :
 	m_patternComboBoxModel(this)
 {
 	setType(Type::Pattern);
+	m_automationIdleTimer.setSingleShot(true);
+	connect(&m_automationIdleTimer, &QTimer::timeout, this, [this]() {
+		setRecordingAutomation(false);
+	});
 }
 
 
@@ -228,6 +232,19 @@ void PatternStore::createClipsForPattern(int pattern)
 	}
 }
 
+void PatternStore::setRecordingAutomation(bool record)
+{
+	if (m_recordAutomation != record)
+	{
+		m_recordAutomation = record;
+		if (!m_recordAutomation)
+		{
+			m_automationIdleTimer.stop();
+		}
+		emit recordingAutomationChanged(m_recordAutomation);
+	}
+}
+
 void PatternStore::handleLiveAutomation(AutomatableModel* model)
 {
 	if (!m_recordAutomation || !model || !Engine::getSong() || !Engine::getSong()->isPlaying())
@@ -240,6 +257,7 @@ void PatternStore::handleLiveAutomation(AutomatableModel* model)
 
 	// Look for existing AutomationClip in currentPattern controlling this model
 	AutomationClip* targetClip = nullptr;
+	bool isNewClip = false;
 	for (Track* t : tracks())
 	{
 		if (t->type() == Track::Type::Automation && curPat < t->numOfClips())
@@ -271,6 +289,7 @@ void PatternStore::handleLiveAutomation(AutomatableModel* model)
 			if (targetClip)
 			{
 				targetClip->addObject(model);
+				isNewClip = true;
 			}
 		}
 	}
@@ -278,12 +297,27 @@ void PatternStore::handleLiveAutomation(AutomatableModel* model)
 	if (targetClip)
 	{
 		TimePos curPos = Engine::getSong()->getPlayPos(Song::PlayMode::Pattern);
-		if (targetClip->length() > 0)
+		if (!isNewClip && targetClip->length() > 0)
 		{
+			// Loop overdub within set clip steps for existing automated knobs
 			curPos = curPos % targetClip->length();
 		}
 		targetClip->recordValue(curPos, model->inverseScaledValue(model->value<float>()));
+		if (isNewClip)
+		{
+			// For new automated knobs: ensure clip steps match drag duration / play position
+			int requiredSteps = (curPos.getTicks() / (DefaultTicksPerBar / 16)) + 1;
+			if (requiredSteps > targetClip->steps())
+			{
+				targetClip->setSteps(requiredSteps);
+			}
+		}
 		emit targetClip->dataChanged();
+
+		if (m_recordMode == RecordMode::Touch)
+		{
+			m_automationIdleTimer.start(4000);
+		}
 	}
 }
 

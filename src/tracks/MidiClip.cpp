@@ -88,19 +88,24 @@ MidiClip::~MidiClip()
 void MidiClip::resizeToFirstTrack()
 {
 	// Resize this track to be the same as existing tracks in the pattern
+	if (!m_instrumentTrack || !m_instrumentTrack->trackContainer()) { return; }
 	const TrackContainer::TrackList & tracks =
 		m_instrumentTrack->trackContainer()->tracks();
 	for (const auto& track : tracks)
 	{
-		if (track->type() == Track::Type::Instrument)
+		if (track->type() == Track::Type::Instrument && track != m_instrumentTrack)
 		{
-			if (track != m_instrumentTrack)
+			const auto& instrumentTrackClips = m_instrumentTrack->getClips();
+			const auto currentClipIt = std::find(instrumentTrackClips.begin(), instrumentTrackClips.end(), this);
+			int currentClip = currentClipIt != instrumentTrackClips.end() ?
+				static_cast<int>(std::distance(instrumentTrackClips.begin(), currentClipIt)) : 0;
+			if (currentClip >= 0 && currentClip < track->numOfClips())
 			{
-				const auto& instrumentTrackClips = m_instrumentTrack->getClips();
-				const auto currentClipIt = std::find(instrumentTrackClips.begin(), instrumentTrackClips.end(), this);
-				unsigned int currentClip = currentClipIt != instrumentTrackClips.end() ?
-					std::distance(instrumentTrackClips.begin(), currentClipIt) : -1;
-				m_steps = static_cast<MidiClip*>(track->getClip(currentClip))->m_steps;
+				auto otherClip = dynamic_cast<MidiClip*>(track->getClip(currentClip));
+				if (otherClip)
+				{
+					m_steps = otherClip->m_steps;
+				}
 			}
 			break;
 		}
@@ -164,11 +169,15 @@ TimePos MidiClip::beatClipLength() const
 		{
 			max_length = std::max<tick_t>(max_length, note->pos() + 1);
 		}
+		else if (note->length() > 0)
+		{
+			max_length = std::max<tick_t>(max_length, note->endPos());
+		}
 	}
 
-	if (m_steps != TimePos::stepsPerBar())
+	if (m_steps != TimePos::stepsPerBar() && m_steps > 0)
 	{
-		max_length = m_steps * TimePos::ticksPerBar() / TimePos::stepsPerBar();
+		max_length = std::max(max_length, static_cast<tick_t>(m_steps * TimePos::ticksPerBar() / TimePos::stepsPerBar()));
 	}
 
 	return TimePos{max_length};
@@ -627,6 +636,66 @@ void MidiClip::setSteps( int newSteps )
 	}
 	m_steps = newSteps;
 	updateLength();
+	emit dataChanged();
+}
+
+
+void MidiClip::duplicateContent()
+{
+	Engine::audioEngine()->requestChangeInModel();
+	const tick_t currentLen = length().getTicks();
+	if (currentLen <= 0)
+	{
+		Engine::audioEngine()->doneChangeInModel();
+		return;
+	}
+
+	NoteVector dups;
+	dups.reserve(m_notes.size());
+	for (const auto& note : m_notes)
+	{
+		auto dup = note->clone();
+		dup->setPos(dup->pos() + currentLen);
+		dups.push_back(dup);
+	}
+	for (auto* n : dups)
+	{
+		m_notes.push_back(n);
+	}
+
+	if (m_steps > 0)
+	{
+		m_steps *= 2;
+	}
+	changeLength(TimePos(currentLen * 2));
+	updatePatternTrack();
+	Engine::audioEngine()->doneChangeInModel();
+	emit dataChanged();
+}
+
+
+void MidiClip::scaleContent(float percentage)
+{
+	if (percentage <= 0.0f) { return; }
+	const float ratio = percentage / 100.0f;
+	Engine::audioEngine()->requestChangeInModel();
+
+	for (auto& note : m_notes)
+	{
+		note->setPos(static_cast<tick_t>(std::round(note->pos() * ratio)));
+		if (note->type() != Note::Type::Step)
+		{
+			note->setLength(std::max(1, static_cast<int>(std::round(note->length() * ratio))));
+		}
+	}
+
+	if (m_steps > 0)
+	{
+		m_steps = std::max(1, static_cast<int>(std::round(m_steps * ratio)));
+	}
+	changeLength(TimePos(std::max(1, static_cast<int>(std::round(length().getTicks() * ratio)))));
+	updatePatternTrack();
+	Engine::audioEngine()->doneChangeInModel();
 	emit dataChanged();
 }
 

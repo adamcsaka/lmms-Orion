@@ -196,12 +196,14 @@ SongEditor::SongEditor( Song * song ) :
 	m_masterPitchSlider->setFixedSize( 26, 60 );
 	m_masterPitchSlider->setTickInterval( 12 );
 	m_masterPitchSlider->setToolTip(tr("Global transposition"));
-	connect( m_masterPitchSlider, SIGNAL(logicValueChanged(int)), this,
-			SLOT(setMasterPitch(int)));
+	connect( m_masterPitchSlider, &AutomatableSlider::sliderMoved, this, [this](float val) {
+		setMasterPitch(val);
+	});
+	connect( &m_song->m_masterPitchModel, &Model::dataChanged, this, [this]() {
+		setMasterPitch(m_song->m_masterPitchModel.value());
+	});
 	connect( m_masterPitchSlider, SIGNAL(sliderPressed()), this,
 			SLOT(showMasterPitchFloat()));
-	connect( m_masterPitchSlider, SIGNAL(logicSliderMoved(int)), this,
-			SLOT(updateMasterPitchFloat(int)));
 	connect( m_masterPitchSlider, SIGNAL(sliderReleased()), this,
 			SLOT(hideMasterPitchFloat()));
 
@@ -673,7 +675,7 @@ void SongEditor::hideMasterVolumeFloat( void )
 
 
 
-void SongEditor::setMasterPitch( int new_val )
+void SongEditor::setMasterPitch( float new_val )
 {
 	updateMasterPitchFloat( new_val );
 	if( m_mpsStatus->isVisible() == false && m_song->m_loadingProject == false
@@ -699,9 +701,9 @@ void SongEditor::showMasterPitchFloat( void )
 
 
 
-void SongEditor::updateMasterPitchFloat( int new_val )
+void SongEditor::updateMasterPitchFloat( float new_val )
 {
-	m_mpsStatus->setText( tr( "Value: %1 keys").arg( new_val ) );
+	m_mpsStatus->setText( tr( "Value: %1 st").arg( QString::number( new_val, 'f', 3 ) ) );
 
 }
 

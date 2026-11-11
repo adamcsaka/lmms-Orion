@@ -176,6 +176,10 @@ void TrackOperationsWidget::cloneTrack()
 		// if this track was solo, make the new track the new solo
 		newTrack->toggleSolo();
 	}
+
+	newTrackView->changePosition();
+	newTrackView->update();
+	tcView->update();
 }
 
 

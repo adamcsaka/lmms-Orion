@@ -438,14 +438,8 @@ jobs:
       #     ctest --output-on-failure -j2
       - name: Package
         run: |
-          cmake --build build --target package
           cmake --install build --prefix build\portable
           Compress-Archive -Path build\portable\* -DestinationPath build\lmms-win64-portable.zip
-      - name: Upload installer
-        uses: actions/upload-artifact@v7
-        with:
-          name: lmms-win64-installer
-          path: build\lmms-*.exe
       - name: Upload portable zip
         uses: actions/upload-artifact@v7
         with:

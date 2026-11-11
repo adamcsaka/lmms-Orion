@@ -201,9 +201,10 @@ void PatternTrack::loadTrackSpecificSettings(const QDomElement& _this)
 	{
 		QDomNode node = _this.namedItem(
 					TrackContainer::classNodeName() );
-		if( node.isElement() )
+		if( node.isElement() && !Engine::getSong()->isPatternStoreRestored() )
 		{
 			Engine::patternStore()->restoreState(node.toElement());
+			Engine::getSong()->setPatternStoreRestored(true);
 		}
 	}
 /*	doesn't work yet because PatternTrack-ctor also sets current pattern so if

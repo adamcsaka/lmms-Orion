@@ -131,6 +131,8 @@ public slots:
 	void removeSteps();
 	void setSteps( int newSteps );
 	int steps() const { return m_steps; }
+	void duplicateContent();
+	void scaleContent( float percentage );
 	void clear();
 
 protected:
