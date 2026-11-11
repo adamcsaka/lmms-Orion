@@ -73,7 +73,7 @@ Song::Song() :
 	m_timeSigModel( this ),
 	m_oldTicksPerBar( DefaultTicksPerBar ),
 	m_masterVolumeModel( 100, 0, 200, this, tr( "Master volume" ) ),
-	m_masterPitchModel( 0.0f, -24.0f, 24.0f, 0.001f, this, tr( "Master pitch" ) ),
+	m_masterPitchModel( 0, -24, 24, this, tr( "Master pitch" ) ),
 	m_nLoadingTrack( 0 ),
 	m_fileName(),
 	m_oldFileName(),
@@ -109,7 +109,6 @@ Song::Song() :
 
 	connect( &m_masterVolumeModel, SIGNAL(dataChanged()),
 			this, SLOT(masterVolumeChanged()), Qt::DirectConnection );
-	m_masterPitchModel.setStrictStepSize(false);
 /*	connect( &m_masterPitchModel, SIGNAL(dataChanged()),
 			this, SLOT(masterPitchChanged()));*/
 
@@ -1427,7 +1426,7 @@ void Song::exportProjectMidi(const std::filesystem::path& filePath) const
 	ExportFilter *exf = dynamic_cast<ExportFilter *> (Plugin::instantiate("midiexport", nullptr, nullptr));
 	if (exf)
 	{
-		exf->tryExport(tracks, patternStoreTracks, getTempo(), static_cast<int>(std::round(m_masterPitchModel.value())), filePath);
+		exf->tryExport(tracks, patternStoreTracks, getTempo(), m_masterPitchModel.value(), filePath);
 	}
 	else
 	{

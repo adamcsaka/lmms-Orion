@@ -67,7 +67,7 @@ class LMMS_EXPORT Song : public TrackContainer
 {
 	Q_OBJECT
 	mapPropertyFromModel( bpm_t,getTempo,setTempo,m_tempoModel );
-	mapPropertyFromModel( float,masterPitch,setMasterPitch,m_masterPitchModel );
+	mapPropertyFromModel( int,masterPitch,setMasterPitch,m_masterPitchModel );
 	mapPropertyFromModel( int,masterVolume,setMasterVolume, m_masterVolumeModel );
 public:
 	enum class PlayMode
@@ -415,7 +415,7 @@ private:
 	MeterModel m_timeSigModel;
 	int m_oldTicksPerBar;
 	IntModel m_masterVolumeModel;
-	FloatModel m_masterPitchModel;
+	IntModel m_masterPitchModel;
 
 	ControllerVector m_controllers;
 
