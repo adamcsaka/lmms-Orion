@@ -257,8 +257,21 @@ int TrackContainer::removeUnusedAutomationTracks()
 			bool hasContent = false;
 			for (int c = 0; c < t->numOfClips(); ++c)
 			{
-				auto ac = dynamic_cast<AutomationClip*>(t->getClip(c));
-				if (ac && (!ac->objects().isEmpty() || !ac->empty()))
+				auto clip = t->getClip(c);
+				if (!clip)
+				{
+					continue;
+				}
+				auto ac = dynamic_cast<AutomationClip*>(clip);
+				if (ac)
+				{
+					if (!ac->objects().empty() || !ac->getTimeMap().isEmpty())
+					{
+						hasContent = true;
+						break;
+					}
+				}
+				else
 				{
 					hasContent = true;
 					break;

@@ -25,6 +25,7 @@
 #include "PatternClipView.h"
 
 #include <QApplication>
+#include <QDomDocument>
 #include <QMenu>
 #include <QPainter>
 
@@ -33,6 +34,7 @@
 #include "Engine.h"
 #include "GuiApplication.h"
 #include "InstrumentTrack.h"
+#include "JournallingObject.h"
 #include "MainWindow.h"
 #include "MidiClip.h"
 #include "PatternClip.h"
@@ -310,7 +312,13 @@ void PatternClipView::explodePatternIntoSong()
 	{
 		if (patternIndex >= psTrack->numOfClips()) { continue; }
 		Clip* srcClip = psTrack->getClip(patternIndex);
-		if (!srcClip || srcClip->empty() || srcClip->length() <= 0) { continue; }
+		if (!srcClip || srcClip->length() <= 0) { continue; }
+
+		auto mc = dynamic_cast<MidiClip*>(srcClip);
+		if (mc && mc->notes().empty()) { continue; }
+
+		auto ac = dynamic_cast<AutomationClip*>(srcClip);
+		if (ac && ac->objects().empty() && ac->getTimeMap().isEmpty()) { continue; }
 
 		Track* destTrack = nullptr;
 
@@ -327,30 +335,35 @@ void PatternClipView::explodePatternIntoSong()
 			}
 			if (!destTrack)
 			{
-				destTrack = psTrack->clone();
+				QDomDocument doc;
+				QDomElement parent = doc.createElement("clonedtrack");
+				QDomElement trackElement = doc.createElement("track");
+				parent.appendChild(trackElement);
+				psTrack->saveSettings(doc, trackElement);
+				JournallingObject::replaceJournalIDs(parent);
+
+				destTrack = Track::create(trackElement, song);
 				if (destTrack)
 				{
 					while (destTrack->numOfClips() > 0)
 					{
 						delete destTrack->getClip(0);
 					}
-					song->addTrack(destTrack);
 				}
 			}
 		}
 		else if (psTrack->type() == Track::Type::Automation)
 		{
-			auto srcAc = dynamic_cast<AutomationClip*>(srcClip);
 			for (Track* st : song->tracks())
 			{
 				if (st->type() == Track::Type::Automation)
 				{
-					if (srcAc && !srcAc->objects().isEmpty())
+					if (ac && !ac->objects().empty())
 					{
 						for (int c = 0; c < st->numOfClips(); ++c)
 						{
 							auto stAc = dynamic_cast<AutomationClip*>(st->getClip(c));
-							if (stAc && !stAc->objects().isEmpty() && stAc->objects().first() == srcAc->objects().first())
+							if (stAc && !stAc->objects().empty() && stAc->objects().front() == ac->objects().front())
 							{
 								destTrack = st;
 								break;
@@ -386,6 +399,17 @@ void PatternClipView::explodePatternIntoSong()
 			{
 				Clip::copyStateTo(srcClip, newClip);
 				newClip->movePosition(repeatPos);
+				auto newAc = dynamic_cast<AutomationClip*>(newClip);
+				if (newAc && ac)
+				{
+					for (auto obj : ac->objects())
+					{
+						if (obj)
+						{
+							newAc->addObject(obj);
+						}
+					}
+				}
 				emit newClip->dataChanged();
 			}
 		}
