@@ -31,6 +31,7 @@
 #include "ClipView.h"
 #include "ComboBox.h"
 #include "DataFile.h"
+#include "GuiApplication.h"
 #include "embed.h"
 #include "MainWindow.h"
 #include "PatternStore.h"

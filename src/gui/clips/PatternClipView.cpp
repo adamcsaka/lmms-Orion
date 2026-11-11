@@ -293,7 +293,7 @@ void PatternClipView::explodePatternIntoSong()
 {
 	if (!m_patternClip || !Engine::getSong() || !Engine::patternStore()) { return; }
 
-	int patternIndex = m_patternClip->pattern();
+	int patternIndex = m_patternClip->patternIndex();
 	TimePos startPos = m_patternClip->startPosition();
 	TimePos clipLength = m_patternClip->length();
 

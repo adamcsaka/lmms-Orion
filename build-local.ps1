@@ -12,6 +12,9 @@ $cmakeDir = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Comm
 $ninjaDir = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja"
 $qtDir = "C:\Qt\6.8.0\msvc2022_64"
 $vcpkgToolchain = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
+$gitCmdDir = "C:\lmms\git\cmd"
+$gitBinDir = "C:\lmms\git\bin"
+$pythonDir = "C:\Users\ahsoka\AppData\Local\Programs\Python\Python312"
 
 if (-not (Test-Path $vcvars)) {
     Write-Error "Visual Studio 2022 BuildTools vcvars64.bat not found at $vcvars"
@@ -27,7 +30,7 @@ if (-not (Test-Path $vcpkgToolchain)) {
 }
 
 # 2. Add build tools and Qt to PATH for this session
-$env:PATH = "$ninjaDir;$cmakeDir;$qtDir\bin;$env:PATH"
+$env:PATH = "$ninjaDir;$cmakeDir;$gitCmdDir;$gitBinDir;$pythonDir;$qtDir\bin;$env:PATH"
 $env:CMAKE_PREFIX_PATH = $qtDir
 $env:VCPKG_ROOT = "C:\vcpkg"
 
@@ -40,7 +43,7 @@ if (-not (Test-Path "$repoDir\build")) {
 
 # 4. Configure with CMake
 Write-Host "=== Configuring CMake with Ninja & vcpkg ===" -ForegroundColor Cyan
-& cmd /c "`"$vcvars`" && cmake -S `"$repoDir`" -B `"$repoDir\build`" -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTARGET_UARCH=official -DWANT_QT6=ON -DUSE_COMPILE_CACHE=OFF -DUSE_WERROR=OFF -DCMAKE_PREFIX_PATH=`"$qtDir`" --toolchain `"$vcpkgToolchain`" -DVCPKG_TARGET_TRIPLET=x64-windows -DVCPKG_HOST_TRIPLET=x64-windows"
+& cmd /c "`"$vcvars`" && cmake -S `"$repoDir`" -B `"$repoDir\build`" -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTARGET_UARCH=official -DWANT_QT6=ON -DUSE_COMPILE_CACHE=OFF -DUSE_WERROR=OFF -DCMAKE_PREFIX_PATH=`"$qtDir`" -DGIT_EXECUTABLE=`"C:/lmms/git/cmd/git.exe`" --toolchain `"$vcpkgToolchain`" -DVCPKG_TARGET_TRIPLET=x64-windows -DVCPKG_HOST_TRIPLET=x64-windows"
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "CMake configuration failed with exit code $LASTEXITCODE"
