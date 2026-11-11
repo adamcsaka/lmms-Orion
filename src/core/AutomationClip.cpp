@@ -1085,7 +1085,7 @@ void AutomationClip::duplicateContent()
 	timeMap newMap = m_timeMap;
 	for (auto it = m_timeMap.begin(); it != m_timeMap.end(); ++it)
 	{
-		const TimePos newPos = it.key() + currentLen;
+		const int newPos = it.key() + static_cast<int>(currentLen);
 		AutomationNode node = it.value();
 		node.setPos(newPos);
 		newMap[newPos] = node;
@@ -1110,7 +1110,7 @@ void AutomationClip::scaleContent(float percentage)
 	timeMap newMap;
 	for (auto it = m_timeMap.begin(); it != m_timeMap.end(); ++it)
 	{
-		const TimePos newPos(static_cast<tick_t>(std::round(it.key().getTicks() * ratio)));
+		const int newPos = static_cast<int>(std::round(it.key() * ratio));
 		AutomationNode node = it.value();
 		node.setPos(newPos);
 		newMap[newPos] = node;
