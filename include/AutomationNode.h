@@ -116,6 +116,9 @@ public:
 	//! @param clip clip that m_clip will be set to
 	inline void setClip(AutomationClip* clip) { m_clip = clip; }
 
+	inline int pos() const { return m_pos; }
+	inline void setPos(int pos) { m_pos = pos; }
+
 private:
 	AutomationClip* m_clip; //!< Clip that this node belongs to
 	int m_pos; //!< Time position of this node (matches the timeMap key)
