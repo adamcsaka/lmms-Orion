@@ -177,7 +177,6 @@ void TrackOperationsWidget::cloneTrack()
 		newTrack->toggleSolo();
 	}
 
-	newTrackView->changePosition();
 	newTrackView->update();
 	tcView->update();
 }
