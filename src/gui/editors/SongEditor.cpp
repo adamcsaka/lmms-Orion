@@ -961,6 +961,13 @@ SongEditorWindow::SongEditorWindow(Song* song) :
 	trackActionsToolBar->addAction( m_addSampleTrackAction );
 	trackActionsToolBar->addAction( m_addAutomationTrackAction );
 
+	auto cleanAutoAction = trackActionsToolBar->addAction(
+		embed::getIconPixmap("edit_delete"), tr("Remove unused automation tracks"));
+	connect(cleanAutoAction, &QAction::triggered, [this]() {
+		int count = m_editor->m_song->removeUnusedAutomationTracks();
+		TextFloat::displayMessage(tr("Cleaned Automation"), tr("Removed %1 unused automation track(s) from Song Editor.").arg(count), embed::getIconPixmap("edit_delete"), 2500);
+	});
+
 
 	// Edit actions
 	DropToolBar *editActionsToolBar = addDropToolBarToTop(tr("Edit actions"));

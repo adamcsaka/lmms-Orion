@@ -28,14 +28,19 @@
 #include <QMenu>
 #include <QPainter>
 
+#include "AutomationClip.h"
+#include "AutomationTrack.h"
 #include "Engine.h"
 #include "GuiApplication.h"
+#include "InstrumentTrack.h"
 #include "MainWindow.h"
 #include "MidiClip.h"
 #include "PatternClip.h"
 #include "PatternStore.h"
 #include "PatternTrack.h"
 #include "RenameDialog.h"
+#include "Song.h"
+#include "TextFloat.h"
 #include "TrackContainerView.h"
 #include "TrackView.h"
 
@@ -73,6 +78,9 @@ void PatternClipView::constructContextMenu(QMenu* _cm)
 	_cm->addAction( embed::getIconPixmap( "edit_rename" ),
 						tr( "Change name" ),
 						this, SLOT(changeName()));
+	_cm->addAction( embed::getIconPixmap( "edit_copy" ),
+						tr( "Explode Pattern into Song Editor tracks" ),
+						this, SLOT(explodePatternIntoSong()));
 }
 
 
@@ -274,6 +282,123 @@ void PatternClipView::update()
 	setToolTip(m_patternClip->name());
 
 	ClipView::update();
+}
+
+
+
+
+void PatternClipView::explodePatternIntoSong()
+{
+	if (!m_patternClip || !Engine::getSong() || !Engine::patternStore()) { return; }
+
+	int patternIndex = m_patternClip->pattern();
+	TimePos startPos = m_patternClip->startPosition();
+	TimePos clipLength = m_patternClip->length();
+
+	if (clipLength <= 0)
+	{
+		clipLength = Engine::patternStore()->lengthOfPattern(patternIndex);
+	}
+	if (clipLength <= 0) { return; }
+
+	Song* song = Engine::getSong();
+	PatternStore* ps = Engine::patternStore();
+
+	int explodedTracksCount = 0;
+
+	for (Track* psTrack : ps->tracks())
+	{
+		if (patternIndex >= psTrack->numOfClips()) { continue; }
+		Clip* srcClip = psTrack->getClip(patternIndex);
+		if (!srcClip || srcClip->empty() || srcClip->length() <= 0) { continue; }
+
+		Track* destTrack = nullptr;
+
+		// Match or create track in Song Editor
+		if (psTrack->type() == Track::Type::Instrument)
+		{
+			for (Track* st : song->tracks())
+			{
+				if (st->type() == Track::Type::Instrument && st->name() == psTrack->name())
+				{
+					destTrack = st;
+					break;
+				}
+			}
+			if (!destTrack)
+			{
+				destTrack = psTrack->clone();
+				if (destTrack)
+				{
+					while (destTrack->numOfClips() > 0)
+					{
+						delete destTrack->getClip(0);
+					}
+					song->addTrack(destTrack);
+				}
+			}
+		}
+		else if (psTrack->type() == Track::Type::Automation)
+		{
+			auto srcAc = dynamic_cast<AutomationClip*>(srcClip);
+			for (Track* st : song->tracks())
+			{
+				if (st->type() == Track::Type::Automation)
+				{
+					if (srcAc && !srcAc->objects().isEmpty())
+					{
+						for (int c = 0; c < st->numOfClips(); ++c)
+						{
+							auto stAc = dynamic_cast<AutomationClip*>(st->getClip(c));
+							if (stAc && !stAc->objects().isEmpty() && stAc->objects().first() == srcAc->objects().first())
+							{
+								destTrack = st;
+								break;
+							}
+						}
+					}
+					if (destTrack) break;
+				}
+			}
+			if (!destTrack)
+			{
+				destTrack = Track::create(Track::Type::Automation, song);
+				if (destTrack)
+				{
+					destTrack->setName(psTrack->name());
+				}
+			}
+		}
+
+		if (!destTrack) { continue; }
+
+		TimePos patternLen = srcClip->length();
+		if (patternLen <= 0) { patternLen = DefaultTicksPerBar; }
+
+		int repeats = clipLength.getTicks() / patternLen.getTicks();
+		if (repeats < 1) { repeats = 1; }
+
+		for (int r = 0; r < repeats; ++r)
+		{
+			TimePos repeatPos = startPos + (patternLen * r);
+			Clip* newClip = destTrack->createClip(repeatPos);
+			if (newClip)
+			{
+				Clip::copyStateTo(srcClip, newClip);
+				newClip->movePosition(repeatPos);
+				emit newClip->dataChanged();
+			}
+		}
+
+		++explodedTracksCount;
+	}
+
+	if (explodedTracksCount > 0)
+	{
+		m_patternClip->setMuted(true);
+		emit m_patternClip->dataChanged();
+		TextFloat::displayMessage(tr("Pattern Exploded"), tr("Pattern exploded into %1 Song Editor tracks.").arg(explodedTracksCount), embed::getIconPixmap("pattern_track"), 2500);
+	}
 }
 
 } // namespace lmms::gui

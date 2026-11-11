@@ -1456,6 +1456,12 @@ void MainWindow::onExportProjectMidi()
 	}
 }
 
+void MainWindow::exportPattern()
+{
+	Engine::getSong()->setExportPlayMode(Song::PlayMode::Pattern);
+	exportProject(false);
+}
+
 void MainWindow::exportProject(bool multiExport)
 {
 	QString const & projectFileName = Engine::getSong()->projectFileName();
@@ -1495,8 +1501,16 @@ void MainWindow::exportProject(bool multiExport)
 			efd.setDirectory( ConfigManager::inst()->userProjectsDir() );
 			baseFilename = tr( "untitled" );
 		}
+		if (Engine::getSong()->exportPlayMode() == Song::PlayMode::Pattern)
+		{
+			baseFilename += QString("_pattern_%1").arg(Engine::patternStore()->currentPattern() + 1);
+			efd.setWindowTitle( tr( "Select file for pattern-export..." ) );
+		}
+		else
+		{
+			efd.setWindowTitle( tr( "Select file for project-export..." ) );
+		}
 		efd.selectFile( baseFilename + ProjectRenderer::fileEncodeDevices[0].m_extension );
-		efd.setWindowTitle( tr( "Select file for project-export..." ) );
 	}
 
 	QString suffix = "wav";

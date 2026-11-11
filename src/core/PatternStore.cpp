@@ -296,22 +296,31 @@ void PatternStore::handleLiveAutomation(AutomatableModel* model)
 
 	if (targetClip)
 	{
-		TimePos curPos = Engine::getSong()->getPlayPos(Song::PlayMode::Pattern);
-		if (!isNewClip && targetClip->length() > 0)
+		// Ensure recorded automation uses smooth Linear curves instead of blocky/stepped Discrete mode
+		if (targetClip->progressionType() == AutomationClip::ProgressionType::Discrete)
 		{
-			// Loop overdub within set clip steps for existing automated knobs
-			curPos = curPos % targetClip->length();
+			targetClip->setProgressionType(AutomationClip::ProgressionType::Linear);
 		}
-		targetClip->recordValue(curPos, model->inverseScaledValue(model->value<float>()));
-		if (isNewClip)
+
+		TimePos curPos = Engine::getSong()->getPlayPos(Song::PlayMode::Pattern);
+		const bool activeDrag = model->isBeingManipulated();
+
+		if (activeDrag)
 		{
-			// For new automated knobs: ensure clip steps match drag duration / play position
+			// Actively dragging knob/slider: expand clip step count dynamically to match drag duration with no limit
 			int requiredSteps = (curPos.getTicks() / (DefaultTicksPerBar / 16)) + 1;
 			if (requiredSteps > targetClip->steps())
 			{
 				targetClip->setSteps(requiredSteps);
 			}
 		}
+		else if (!isNewClip && targetClip->length() > 0)
+		{
+			// Loop overdub within set clip steps for passive overdub
+			curPos = curPos % targetClip->length();
+		}
+
+		targetClip->recordValue(curPos, model->inverseScaledValue(model->value<float>()));
 		emit targetClip->dataChanged();
 
 		if (m_recordMode == RecordMode::Touch)

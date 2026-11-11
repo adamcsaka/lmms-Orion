@@ -244,6 +244,51 @@ void TrackContainer::clearAllTracks()
 
 
 
+int TrackContainer::removeUnusedAutomationTracks()
+{
+	int removedCount = 0;
+	std::vector<Track*> toDelete;
+
+	m_tracksMutex.lockForRead();
+	for (Track* t : m_tracks)
+	{
+		if (t->type() == Track::Type::Automation)
+		{
+			bool hasContent = false;
+			for (int c = 0; c < t->numOfClips(); ++c)
+			{
+				auto ac = dynamic_cast<AutomationClip*>(t->getClip(c));
+				if (ac && (!ac->objects().isEmpty() || !ac->empty()))
+				{
+					hasContent = true;
+					break;
+				}
+			}
+			if (!hasContent)
+			{
+				toDelete.push_back(t);
+			}
+		}
+	}
+	m_tracksMutex.unlock();
+
+	for (Track* t : toDelete)
+	{
+		delete t;
+		++removedCount;
+	}
+
+	if (removedCount > 0 && Engine::getSong())
+	{
+		Engine::getSong()->setModified();
+	}
+
+	return removedCount;
+}
+
+
+
+
 bool TrackContainer::isEmpty() const
 {
 	for (const auto& track : m_tracks)

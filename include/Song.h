@@ -262,6 +262,9 @@ public:
 	bool isPatternStoreRestored() const { return m_patternStoreRestored; }
 	void setPatternStoreRestored(bool r) { m_patternStoreRestored = r; }
 
+	PlayMode exportPlayMode() const { return m_exportPlayMode; }
+	void setExportPlayMode(PlayMode mode) { m_exportPlayMode = mode; }
+
 	bool isLoadingProject() const
 	{
 		return m_loadingProject;
@@ -458,6 +461,7 @@ private:
 	TimePos m_exportLoopEnd;
 	TimePos m_exportSongEnd;
 	TimePos m_exportEffectiveLength;
+	PlayMode m_exportPlayMode = PlayMode::Song;
 
 	std::shared_ptr<Scale> m_scales[MaxScaleCount];
 	std::shared_ptr<Keymap> m_keymaps[MaxKeymapCount];

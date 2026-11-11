@@ -725,6 +725,25 @@ void Song::startExport()
 	m_exporting = true;
 	updateLength();
 
+	if (m_exportPlayMode == PlayMode::Pattern)
+	{
+		m_exportSongBegin = TimePos(0, 0);
+		m_exportSongEnd = Engine::patternStore()->lengthOfCurrentPattern();
+		if (m_exportSongEnd <= 0)
+		{
+			m_exportSongEnd = TimePos(1, 0);
+		}
+		m_exportLoopBegin = TimePos(0, 0);
+		m_exportLoopEnd = m_exportSongEnd;
+		m_exportEffectiveLength = m_exportSongEnd;
+		m_loopRenderRemaining = 1;
+
+		getTimeline(PlayMode::Pattern).setTicks(0);
+		playPattern();
+		m_vstSyncController.setPlaybackState( true );
+		return;
+	}
+
 	auto& timeline = getTimeline(PlayMode::Song);
 
 	if (m_renderBetweenMarkers)
@@ -774,6 +793,7 @@ void Song::stopExport()
 {
 	stop();
 	m_exporting = false;
+	m_exportPlayMode = PlayMode::Song;
 
 	m_vstSyncController.setPlaybackState( m_playing );
 }

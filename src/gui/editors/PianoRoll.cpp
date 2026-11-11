@@ -300,13 +300,9 @@ PianoRoll::PianoRoll() :
 	connect( &m_stepRecorderWidget, SIGNAL( positionChanged( const lmms::TimePos& ) ),
 			this, SLOT( updatePositionStepRecording( const lmms::TimePos& ) ) );
 
-	// update timeline when in record-accompany mode
+	// update timeline when in record-accompany or pattern play mode
 	connect(&Engine::getSong()->getTimeline(Song::PlayMode::Song), &Timeline::positionChanged, this, &PianoRoll::updatePositionAccompany);
-	// TODO
-/*	connect( engine::getSong()->getPlayPos( Song::PlayMode::Pattern ).m_timeLine,
-				SIGNAL( positionChanged( const lmms::TimePos& ) ),
-			this,
-			SLOT( updatePositionAccompany( const lmms::TimePos& ) ) );*/
+	connect(&Engine::getSong()->getTimeline(Song::PlayMode::Pattern), &Timeline::positionChanged, this, &PianoRoll::updatePositionAccompany);
 
 	removeSelection();
 
@@ -4995,23 +4991,32 @@ void PianoRoll::updatePositionLineHeight()
 
 void PianoRoll::updatePositionAccompany()
 {
-	const TimePos& t = Engine::getSong()->getPlayPos(Song::PlayMode::Song);
 	Song * s = Engine::getSong();
-
-	if( m_recording && hasValidMidiClip() &&
-					s->playMode() != Song::PlayMode::MidiClip )
+	if( !hasValidMidiClip() || !s->isPlaying() )
 	{
-		TimePos pos = t;
-		if (s->playMode() != Song::PlayMode::Pattern)
+		return;
+	}
+
+	if( s->playMode() == Song::PlayMode::Pattern )
+	{
+		TimePos pos = s->getPlayPos(Song::PlayMode::Pattern);
+		if( m_midiClip->length() > 0 )
 		{
-			pos -= m_midiClip->startPosition() + m_midiClip->startTimeOffset();
+			pos = pos % m_midiClip->length();
 		}
-		if( (int) pos > 0 )
+		m_timeLine->timeline()->setTicks(pos, false);
+		autoScroll( pos );
+		m_positionLine->update();
+	}
+	else if( s->playMode() == Song::PlayMode::Song )
+	{
+		TimePos pos = s->getPlayPos(Song::PlayMode::Song);
+		pos -= m_midiClip->startPosition() + m_midiClip->startTimeOffset();
+		if( (int) pos >= 0 && (m_recording || (pos < m_midiClip->length())) )
 		{
-			// Passing false to prevent any `positionJumped` signals from being emitted, since this movement is supposed
-			// to be smoothly tracking the Song's timeline, not the from user forcefully dragging it.
 			m_timeLine->timeline()->setTicks(pos, false);
 			autoScroll( pos );
+			m_positionLine->update();
 		}
 	}
 }

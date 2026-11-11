@@ -37,6 +37,7 @@
 #include "PatternTrack.h"
 #include "Song.h"
 #include "StringPairDrag.h"
+#include "TextFloat.h"
 #include "TimeLineWidget.h"
 #include "TrackView.h"
 
@@ -355,6 +356,22 @@ PatternEditorWindow::PatternEditorWindow(PatternStore* ps) :
 		if (recordAutomationAction->isChecked() != rec)
 		{
 			recordAutomationAction->setChecked(rec);
+		}
+	});
+
+	auto cleanAutoAction = trackAndStepActionsToolBar->addAction(
+		embed::getIconPixmap("edit_delete"), tr("Remove unused automation tracks"));
+	connect(cleanAutoAction, &QAction::triggered, [ps]() {
+		int count = ps->removeUnusedAutomationTracks();
+		TextFloat::displayMessage(tr("Cleaned Automation"), tr("Removed %1 unused automation track(s) from Pattern Editor.").arg(count), embed::getIconPixmap("edit_delete"), 2500);
+	});
+
+	auto exportPatternAction = trackAndStepActionsToolBar->addAction(
+		embed::getIconPixmap("project_export"), tr("Export pattern to audio file..."));
+	connect(exportPatternAction, &QAction::triggered, []() {
+		if (getGUI() && getGUI()->mainWindow())
+		{
+			getGUI()->mainWindow()->exportPattern();
 		}
 	});
 

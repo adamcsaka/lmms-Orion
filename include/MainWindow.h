@@ -194,6 +194,7 @@ private:
 	void toggleWindow( QWidget *window, bool forceShow = false );
 
 	void exportProject(bool multiExport = false);
+	void exportPattern();
 	void handleSaveResult(QString const & filename, bool songSavedSuccessfully);
 	bool guiSaveProject();
 	bool guiSaveProjectAs( const QString & filename );
