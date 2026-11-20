@@ -102,13 +102,14 @@ void MidiClipView::changeStepCount()
 {
 	if (!m_clip) { return; }
 	bool ok = false;
-	int newSteps = QInputDialog::getInt(
+	double currentSteps = static_cast<double>(m_clip->fractionalSteps());
+	double newSteps = QInputDialog::getDouble(
 		this, tr("Set track steps"),
-		tr("Number of steps for this track (e.g. 12 for 3/4, 7 for 7/8):"),
-		m_clip->steps(), 1, 1024, 1, &ok );
+		tr("Number of steps for this track (e.g. 1, 2, 3 in 4/4, 12 for 3/4, or decimals like 2.5):"),
+		currentSteps, 0.25, 1024.0, 2, &ok );
 	if (ok)
 	{
-		m_clip->setSteps(newSteps);
+		m_clip->setFractionalSteps(static_cast<float>(newSteps));
 	}
 }
 
@@ -274,7 +275,7 @@ void MidiClipView::constructContextMenu( QMenu * _cm )
 						tr( "Change name" ),
 						this, SLOT(changeName()));
 
-	if (isBeat)
+	if (isBeat || (m_clip && m_clip->isInPattern()))
 	{
 		_cm->addSeparator();
 

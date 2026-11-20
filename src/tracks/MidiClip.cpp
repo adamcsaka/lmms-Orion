@@ -161,7 +161,24 @@ void MidiClip::updateLength()
 
 TimePos MidiClip::beatClipLength() const
 {
-	tick_t max_length = TimePos::ticksPerBar();
+	if (m_fractionalSteps > 0.0f)
+	{
+		tick_t stepTicks = static_cast<tick_t>(m_fractionalSteps * TimePos::ticksPerBar() / TimePos::stepsPerBar());
+		if (stepTicks > 0)
+		{
+			return TimePos{stepTicks};
+		}
+	}
+	else if (m_steps > 0)
+	{
+		tick_t stepTicks = static_cast<tick_t>(m_steps * TimePos::ticksPerBar() / TimePos::stepsPerBar());
+		if (stepTicks > 0)
+		{
+			return TimePos{stepTicks};
+		}
+	}
+
+	tick_t max_length = 0;
 
 	for (const auto& note : m_notes)
 	{
@@ -175,12 +192,7 @@ TimePos MidiClip::beatClipLength() const
 		}
 	}
 
-	if (m_steps != TimePos::stepsPerBar() && m_steps > 0)
-	{
-		max_length = std::max(max_length, static_cast<tick_t>(m_steps * TimePos::ticksPerBar() / TimePos::stepsPerBar()));
-	}
-
-	return TimePos{max_length};
+	return TimePos{max_length > 0 ? max_length : TimePos::ticksPerBar()};
 }
 
 
@@ -458,6 +470,10 @@ void MidiClip::exportToXML(QDomDocument& doc, QDomElement& midiClipElement, bool
 	}
 	midiClipElement.setAttribute("muted", isMuted());
 	midiClipElement.setAttribute("steps", m_steps);
+	if (m_fractionalSteps > 0.0f)
+	{
+		midiClipElement.setAttribute("fractionalSteps", QString::number(m_fractionalSteps, 'f', 2));
+	}
 	midiClipElement.setAttribute("len", length());
 
 	// now save settings of all notes
@@ -518,6 +534,14 @@ void MidiClip::loadSettings( const QDomElement & _this )
 	if( m_steps == 0 )
 	{
 		m_steps = TimePos::stepsPerBar();
+	}
+	if (_this.hasAttribute("fractionalSteps"))
+	{
+		m_fractionalSteps = _this.attribute("fractionalSteps").toFloat();
+	}
+	else
+	{
+		m_fractionalSteps = static_cast<float>(m_steps);
 	}
 
 	checkType();
@@ -627,6 +651,7 @@ void MidiClip::removeSteps()
 void MidiClip::setSteps( int newSteps )
 {
 	if( newSteps < 1 || newSteps == m_steps ) { return; }
+	m_fractionalSteps = static_cast<float>(newSteps);
 	if( newSteps < m_steps )
 	{
 		for( int i = newSteps; i < m_steps; ++i )
@@ -635,6 +660,23 @@ void MidiClip::setSteps( int newSteps )
 		}
 	}
 	m_steps = newSteps;
+	updateLength();
+	emit dataChanged();
+}
+
+void MidiClip::setFractionalSteps( float steps )
+{
+	if( steps <= 0.0f ) { return; }
+	m_fractionalSteps = steps;
+	int intSteps = std::max(1, static_cast<int>(std::ceil(steps)));
+	if( intSteps < m_steps )
+	{
+		for( int i = intSteps; i < m_steps; ++i )
+		{
+			setStep( i, false );
+		}
+	}
+	m_steps = intSteps;
 	updateLength();
 	emit dataChanged();
 }

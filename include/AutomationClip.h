@@ -229,6 +229,9 @@ public:
 
 	int steps() const { return m_steps; }
 	void setSteps( int steps );
+	float fractionalSteps() const { return m_fractionalSteps > 0.0f ? m_fractionalSteps : static_cast<float>(m_steps); }
+	void setFractionalSteps( float steps );
+	void shiftNodes( int deltaTicks );
 
 	static int quantization() { return s_quantization; }
 	static void setQuantization(int q) { s_quantization = q; }
@@ -289,6 +292,7 @@ private:
 
 	bool m_isRecording;
 	int m_steps;
+	float m_fractionalSteps = 0.0f;
 	float m_lastRecordedValue;
 
 	static int s_quantization;

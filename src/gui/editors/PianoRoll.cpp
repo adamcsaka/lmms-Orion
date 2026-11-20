@@ -41,6 +41,7 @@
 #include <QPushButton>
 #include <QScrollBar>
 #include <QSpinBox>
+#include <QDoubleSpinBox>
 #include <QStyleOption>
 #include <QToolButton>
 
@@ -152,7 +153,8 @@ std::array<PianoRoll::KeyType, 12> PianoRoll::prKeyOrder
 const int DEFAULT_PR_PPB = DEFAULT_CELL_WIDTH * DefaultStepsPerBar;
 
 const std::vector<float> PianoRoll::m_zoomLevels =
-		{0.125f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f, 4.0f, 8.0f};
+		{0.03125f, 0.0625f, 0.125f, 0.1875f, 0.25f, 0.35f, 0.5f, 0.65f, 0.75f, 0.85f, 1.0f,
+		 1.25f, 1.5f, 1.75f, 2.0f, 2.5f, 3.0f, 4.0f, 5.0f, 6.0f, 8.0f, 10.0f, 12.0f, 16.0f};
 
 const std::vector<float> PianoRoll::m_zoomYLevels =
 		{0.25f, 0.5f, 1.0f, 1.5f, 2.0f, 2.5f, 3.0f, 4.0f};
@@ -4142,8 +4144,10 @@ void PianoRoll::resizeEvent(QResizeEvent* re)
 
 void PianoRoll::adjustLeftRightScoll(int value)
 {
-	m_leftRightScroll->setValue(m_leftRightScroll->value() -
-							value * 0.3f / m_zoomLevels[m_zoomingModel.value()]);
+	float zoomFactor = std::max(0.25f, m_zoomLevels[m_zoomingModel.value()]);
+	int delta = static_cast<int>(std::round((value * 0.15f) / zoomFactor));
+	delta = std::clamp(delta, -100, 100);
+	m_leftRightScroll->setValue(m_leftRightScroll->value() - delta);
 }
 
 
@@ -5580,25 +5584,27 @@ PianoRollWindow::PianoRollWindow() :
 	zoomAndNotesToolBar->addSeparator();
 	zoomAndNotesToolBar->addWidget(snapWidget);
 
-	zoomAndNotesToolBar->addSeparator();
-	auto stepsWidget = new QWidget(m_toolBar);
+	DropToolBar* stepsToolBar = addDropToolBarToTop(tr("Step controls"));
+	auto stepsWidget = new QWidget(stepsToolBar);
 	auto stepsHbox = new QHBoxLayout(stepsWidget);
 	stepsHbox->setContentsMargins(0, 0, 0, 0);
-	stepsHbox->setSpacing(2);
+	stepsHbox->setSpacing(4);
 	auto stepsLbl = new QLabel(tr("Steps:"), stepsWidget);
-	m_stepsSpinBox = new QSpinBox(stepsWidget);
-	m_stepsSpinBox->setRange(1, 1024);
-	m_stepsSpinBox->setValue(16);
-	m_stepsSpinBox->setToolTip(tr("Pattern step count for current clip"));
+	m_stepsSpinBox = new QDoubleSpinBox(stepsWidget);
+	m_stepsSpinBox->setRange(0.25, 1024.0);
+	m_stepsSpinBox->setSingleStep(1.0);
+	m_stepsSpinBox->setDecimals(2);
+	m_stepsSpinBox->setValue(16.0);
+	m_stepsSpinBox->setToolTip(tr("Pattern step count for current clip (supports fractions like 1, 2, 3 in 4/4 or decimals)"));
 	stepsHbox->addWidget(stepsLbl);
 	stepsHbox->addWidget(m_stepsSpinBox);
 	stepsWidget->setLayout(stepsHbox);
-	zoomAndNotesToolBar->addWidget(stepsWidget);
+	stepsToolBar->addWidget(stepsWidget);
 
-	connect(m_stepsSpinBox, qOverload<int>(&QSpinBox::valueChanged), this, [this](int steps) {
-		if (m_editor->hasValidMidiClip() && m_editor->currentMidiClip()->steps() != steps)
+	connect(m_stepsSpinBox, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double steps) {
+		if (m_editor->hasValidMidiClip() && std::abs(m_editor->currentMidiClip()->fractionalSteps() - steps) > 0.001)
 		{
-			const_cast<MidiClip*>(m_editor->currentMidiClip())->setSteps(steps);
+			const_cast<MidiClip*>(m_editor->currentMidiClip())->setFractionalSteps(static_cast<float>(steps));
 		}
 	});
 
@@ -5896,7 +5902,7 @@ void PianoRollWindow::updateAfterMidiClipChange()
 		{
 			QSignalBlocker blocker(m_stepsSpinBox);
 			m_stepsSpinBox->setEnabled(true);
-			m_stepsSpinBox->setValue(m_editor->currentMidiClip()->steps());
+			m_stepsSpinBox->setValue(m_editor->currentMidiClip()->fractionalSteps());
 		}
 		else
 		{

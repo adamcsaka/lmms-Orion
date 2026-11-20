@@ -44,7 +44,7 @@ class QPushButton;
 class QScrollBar;
 class QMenu;
 class QToolButton;
-class QSpinBox;
+class QDoubleSpinBox;
 
 namespace lmms
 {
@@ -645,7 +645,7 @@ private:
 	ComboBox * m_chordComboBox;
 	ComboBox* m_snapComboBox;
 	QPushButton * m_clearGhostButton;
-	QSpinBox* m_stepsSpinBox;
+	QDoubleSpinBox* m_stepsSpinBox;
 
 };
 

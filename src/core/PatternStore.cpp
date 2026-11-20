@@ -303,24 +303,26 @@ void PatternStore::handleLiveAutomation(AutomatableModel* model)
 		}
 
 		TimePos curPos = Engine::getSong()->getPlayPos(Song::PlayMode::Pattern);
+		const tick_t patLenTicks = std::max(TimePos::ticksPerBar(), static_cast<tick_t>(lengthOfCurrentPattern() * DefaultTicksPerBar));
+		curPos = TimePos(curPos.getTicks() % patLenTicks);
+
 		const bool activeDrag = model->isBeingManipulated();
 
-		if (activeDrag)
+		if (isNewClip && targetClip->steps() == 0)
 		{
-			// Actively dragging knob/slider: expand clip step count dynamically to match drag duration with no limit
-			int requiredSteps = (curPos.getTicks() / (DefaultTicksPerBar / 16)) + 1;
-			if (requiredSteps > targetClip->steps())
-			{
-				targetClip->setSteps(requiredSteps);
-			}
-		}
-		else if (!isNewClip && targetClip->length() > 0)
-		{
-			// Loop overdub within set clip steps for passive overdub
-			curPos = curPos % targetClip->length();
+			targetClip->setSteps(TimePos::stepsPerBar());
 		}
 
 		targetClip->recordValue(curPos, model->inverseScaledValue(model->value<float>()));
+
+		// Dynamically size clip step count to fit recorded automation nodes (like piano roll)
+		const tick_t maxRecordedTick = curPos.getTicks();
+		const int stepsNeeded = static_cast<int>((maxRecordedTick / (DefaultTicksPerBar / 16)) + 1);
+		if (stepsNeeded > targetClip->steps())
+		{
+			targetClip->setSteps(stepsNeeded);
+		}
+
 		emit targetClip->dataChanged();
 
 		if (m_recordMode == RecordMode::Touch)

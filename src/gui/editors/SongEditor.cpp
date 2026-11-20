@@ -57,6 +57,13 @@
 #include "TimeDisplayWidget.h"
 #include "TimeLineWidget.h"
 #include "TrackView.h"
+#include "InstrumentTrack.h"
+#include "AudioBusHandle.h"
+#include "Effect.h"
+#include "EffectChain.h"
+#include "PatternStore.h"
+#include <cmath>
+#include <cstdlib>
 
 namespace lmms::gui
 {
@@ -64,9 +71,9 @@ namespace lmms::gui
 namespace
 {
 
-constexpr int MIN_PIXELS_PER_BAR = 4;
-constexpr int MAX_PIXELS_PER_BAR = 400;
-constexpr int ZOOM_STEPS = 200;
+constexpr int MIN_PIXELS_PER_BAR = 1;
+constexpr int MAX_PIXELS_PER_BAR = 1000;
+constexpr int ZOOM_STEPS = 500;
 
 constexpr std::array SNAP_SIZES{8.f, 4.f, 2.f, 1.f, 1/2.f, 1/4.f, 1/8.f, 1/16.f};
 constexpr std::array PROPORTIONAL_SNAP_SIZES{64.f, 32.f, 16.f, 8.f, 4.f, 2.f, 1.f, 1/2.f, 1/4.f, 1/8.f, 1/16.f, 1/32.f, 1/64.f};
@@ -531,8 +538,9 @@ void SongEditor::keyPressEvent( QKeyEvent * ke )
 
 void SongEditor::adjustLeftRightScoll(int value)
 {
+	float scrollFactor = std::clamp(static_cast<float>(DEFAULT_PIXELS_PER_BAR) / pixelsPerBar(), 0.25f, 4.0f);
 	m_leftRightScroll->setValue(m_leftRightScroll->value()
-						- value * DEFAULT_PIXELS_PER_BAR / pixelsPerBar());
+						- static_cast<int>(value * 0.5f * scrollFactor));
 }
 
 
@@ -545,8 +553,8 @@ void SongEditor::wheelEvent( QWheelEvent * we )
 		// tick based on the mouse x-position where the scroll wheel was used
 		int tick = x / pixelsPerBar() * TimePos::ticksPerBar();
 
-		// move zoom slider (pixelsPerBar will change automatically)
-		int step = we->modifiers() & Qt::ShiftModifier ? 1 : 5;
+		// move zoom slider (pixelsPerBar will change automatically) with fine precision
+		int step = we->modifiers() & Qt::ShiftModifier ? 1 : 2;
 		// when Alt is pressed, wheelEvent returns delta for x coordinate (mimics horizontal mouse wheel)
 		int direction = (we->angleDelta().y() + we->angleDelta().x()) > 0 ? 1 : -1;
 		m_zoomingModel->incValue(step * direction);
@@ -966,6 +974,166 @@ SongEditorWindow::SongEditorWindow(Song* song) :
 	connect(cleanAutoAction, &QAction::triggered, [this]() {
 		int count = m_editor->m_song->removeUnusedAutomationTracks();
 		TextFloat::displayMessage(tr("Cleaned Automation"), tr("Removed %1 unused automation track(s) from Song Editor.").arg(count), embed::getIconPixmap("edit_delete"), 2500);
+	});
+
+	auto genRandomInstrumentationAction = trackActionsToolBar->addAction(
+		embed::getIconPixmap("arp_random"), tr("Generate Random Instrumentation"));
+	genRandomInstrumentationAction->setToolTip(tr("Generate 3-5 randomized synth instrument tracks with DSP effects"));
+	connect(genRandomInstrumentationAction, &QAction::triggered, [this]() {
+		const char* synthPlugins[] = {
+			"tripleoscillator", "bitinvader", "monstro", "watsyn",
+			"organic", "freeboy", "nes", "kicker", "sfxr", "vibed", "lb302"
+		};
+		const int numPlugins = sizeof(synthPlugins) / sizeof(synthPlugins[0]);
+
+		const char* fxPlugins[] = {
+			"delay", "dualfilter", "flanger", "bitcrush", "reverbsc", "stereomatrix", "waveshaper"
+		};
+		const int numFx = sizeof(fxPlugins) / sizeof(fxPlugins[0]);
+
+		int numTracks = 3 + (rand() % 3); // 3 to 5 tracks
+		for (int i = 0; i < numTracks; ++i)
+		{
+			auto track = Track::create(Track::Type::Instrument, m_editor->m_song);
+			auto it = dynamic_cast<InstrumentTrack*>(track);
+			if (!it) { continue; }
+
+			const char* chosenSynth = synthPlugins[rand() % numPlugins];
+			it->loadInstrument(chosenSynth);
+			it->setName(QString("%1 (Synth %2)").arg(it->instrumentName()).arg(i + 1));
+
+			const auto models = it->findChildren<AutomatableModel*>();
+			for (auto* m : models)
+			{
+				if (!m) { continue; }
+				if (auto fm = m->dynamicCast<FloatModel>())
+				{
+					float minVal = fm->minValue();
+					float maxVal = fm->maxValue();
+					if (std::isfinite(minVal) && std::isfinite(maxVal) && maxVal > minVal)
+					{
+						float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+						fm->setValue(minVal + r * (maxVal - minVal));
+					}
+				}
+				else if (auto im = m->dynamicCast<IntModel>())
+				{
+					int minVal = im->minValue();
+					int maxVal = im->maxValue();
+					if (maxVal > minVal && (maxVal - minVal) <= 64)
+					{
+						im->setValue(minVal + (rand() % (maxVal - minVal + 1)));
+					}
+				}
+			}
+
+			it->panningModel()->setValue(static_cast<float>((rand() % 121) - 60));
+			it->volumeModel()->setValue(75.0f + static_cast<float>(rand() % 30));
+
+			if (it->audioBusHandle() && it->audioBusHandle()->effects())
+			{
+				const char* chosenFx = fxPlugins[rand() % numFx];
+				Effect* e = Effect::instantiate(QString::fromUtf8(chosenFx), it->audioBusHandle()->effects(), nullptr);
+				if (e && e->isOkay())
+				{
+					it->audioBusHandle()->effects()->appendEffect(e);
+					const auto fxModels = e->findChildren<AutomatableModel*>();
+					for (auto* fm_obj : fxModels)
+					{
+						if (auto fm = fm_obj->dynamicCast<FloatModel>())
+						{
+							float minVal = fm->minValue();
+							float maxVal = fm->maxValue();
+							if (std::isfinite(minVal) && std::isfinite(maxVal) && maxVal > minVal)
+							{
+								float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+								fm->setValue(minVal + r * (maxVal - minVal));
+							}
+						}
+					}
+				}
+			}
+		}
+
+		TextFloat::displayMessage(
+			tr("Random Instrumentation"),
+			tr("Generated %1 randomized instrument tracks with DSP effects!").arg(numTracks),
+			embed::getIconPixmap("arp_random"),
+			3000
+		);
+	});
+
+	auto randomizeAllAction = trackActionsToolBar->addAction(
+		embed::getIconPixmap("random_wave_active"), tr("Randomize All Instruments"));
+	randomizeAllAction->setToolTip(tr("Randomize knobs, sliders, and pitch across all instruments"));
+	connect(randomizeAllAction, &QAction::triggered, [this]() {
+		auto randomizeTrackList = [](const TrackContainer::TrackList& tl) {
+			for (Track* t : tl)
+			{
+				auto it = dynamic_cast<InstrumentTrack*>(t);
+				if (!it) { continue; }
+
+				it->pitchModel()->setValue(static_cast<float>((rand() % 25 - 12) * 100));
+				it->panningModel()->setValue(static_cast<float>((rand() % 161) - 80));
+
+				const auto models = it->findChildren<AutomatableModel*>();
+				for (auto* m : models)
+				{
+					if (!m || m == it->pitchModel() || m == it->volumeModel() || m == it->panningModel()) { continue; }
+					if (auto fm = m->dynamicCast<FloatModel>())
+					{
+						float minVal = fm->minValue();
+						float maxVal = fm->maxValue();
+						if (std::isfinite(minVal) && std::isfinite(maxVal) && maxVal > minVal)
+						{
+							float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+							fm->setValue(minVal + r * (maxVal - minVal));
+						}
+					}
+					else if (auto im = m->dynamicCast<IntModel>())
+					{
+						int minVal = im->minValue();
+						int maxVal = im->maxValue();
+						if (maxVal > minVal && (maxVal - minVal) <= 64)
+						{
+							im->setValue(minVal + (rand() % (maxVal - minVal + 1)));
+						}
+					}
+				}
+
+				if (it->audioBusHandle() && it->audioBusHandle()->effects())
+				{
+					for (Effect* e : it->audioBusHandle()->effects()->effects())
+					{
+						if (!e) { continue; }
+						const auto fxModels = e->findChildren<AutomatableModel*>();
+						for (auto* fm_obj : fxModels)
+						{
+							if (auto fm = fm_obj->dynamicCast<FloatModel>())
+							{
+								float minVal = fm->minValue();
+								float maxVal = fm->maxValue();
+								if (std::isfinite(minVal) && std::isfinite(maxVal) && maxVal > minVal)
+								{
+									float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+									fm->setValue(minVal + r * (maxVal - minVal));
+								}
+							}
+						}
+					}
+				}
+			}
+		};
+
+		randomizeTrackList(m_editor->m_song->tracks());
+		randomizeTrackList(Engine::patternStore()->tracks());
+
+		TextFloat::displayMessage(
+			tr("Instruments Randomized"),
+			tr("Randomized knobs, sliders, and pitch across all instruments!"),
+			embed::getIconPixmap("random_wave_active"),
+			2500
+		);
 	});
 
 

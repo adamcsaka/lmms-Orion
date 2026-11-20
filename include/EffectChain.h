@@ -65,11 +65,14 @@ public:
 	void moveUp( Effect * _effect );
 	bool processAudioBuffer(AudioBuffer& buffer);
 
+	using EffectList = std::vector<Effect*>;
+	const EffectList& effects() const { return m_effects; }
+	EffectList& effects() { return m_effects; }
+
 	void clear();
 
 
 private:
-	using EffectList = std::vector<Effect*>;
 	EffectList m_effects;
 
 	BoolModel m_enabledModel;
