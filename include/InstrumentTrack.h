@@ -262,6 +262,8 @@ public:
 		return m_maxPolyphonyModel.value();
 	}
 
+	void enforcePolyphonyLimit( int maxVoices );
+
 	BoolModel* useMasterPitchModel()
 	{
 		return &m_useMasterPitchModel;
@@ -308,6 +310,7 @@ protected slots:
 	void updatePitch();
 	void updatePitchRange();
 	void updateMixerChannel();
+	void updatePolyphony();
 
 
 private:

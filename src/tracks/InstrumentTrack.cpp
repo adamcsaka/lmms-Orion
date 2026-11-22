@@ -114,6 +114,7 @@ InstrumentTrack::InstrumentTrack(TrackContainer* tc) :
 	connect(&m_pitchModel, SIGNAL(dataChanged()), this, SLOT(updatePitch()), Qt::DirectConnection);
 	connect(&m_pitchRangeModel, SIGNAL(dataChanged()), this, SLOT(updatePitchRange()), Qt::DirectConnection);
 	connect(&m_mixerChannelModel, SIGNAL(dataChanged()), this, SLOT(updateMixerChannel()), Qt::DirectConnection);
+	connect(&m_maxPolyphonyModel, SIGNAL(dataChanged()), this, SLOT(updatePolyphony()), Qt::DirectConnection);
 
 	autoAssignMidiDevice(true);
 }
@@ -688,6 +689,40 @@ void InstrumentTrack::updatePitchRange()
 void InstrumentTrack::updateMixerChannel()
 {
 	m_audioBusHandle.setNextMixerChannel(m_mixerChannelModel.value());
+}
+
+
+
+
+void InstrumentTrack::updatePolyphony()
+{
+	enforcePolyphonyLimit( m_maxPolyphonyModel.value() );
+}
+
+
+
+
+void InstrumentTrack::enforcePolyphonyLimit( int maxVoices )
+{
+	if( maxVoices <= 0 ) { return; }
+
+	while( m_processHandles.size() > static_cast<size_t>(maxVoices) )
+	{
+		NotePlayHandle* oldest = m_processHandles.front();
+		if( !oldest )
+		{
+			m_processHandles.pop_front();
+			continue;
+		}
+
+		if( oldest->midiKey() >= 0 && oldest->midiKey() < NumKeys && m_notes[oldest->midiKey()] == oldest )
+		{
+			m_notes[oldest->midiKey()] = nullptr;
+		}
+
+		oldest->forceRelease();
+		m_processHandles.pop_front();
+	}
 }
 
 
