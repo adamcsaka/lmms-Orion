@@ -29,3 +29,12 @@ globs: **/*
   - NEVER modify track MIDI group numbers (`m_midiGroupModel`).
   - NEVER modify mixer channel assignments or routing bonds (`m_mixerChannelModel`).
   - NEVER mute instruments (`m_mutedModel`). Instruments must remain audible and properly routed to their assigned mixer channels and MIDI groups.
+
+## 7. Multi-Session Awareness & Prior State Inspection
+- **Git Repositories:** Before beginning any bug analysis, code changes, or computations, **ALWAYS** check recent git commits (`git log -n 5`) and `git status`. In multi-window/collaborative environments, another session or process may have already resolved or committed the fix.
+- **Non-Git Projects:** Always check the local machine state: verify existing output files, build artifacts, recent edits, and active background processes before starting work.
+
+## 8. "Ask First, Then Create" for Boost / DeepCoder
+- **NEVER** silently or automatically spawn heavy subagents (such as DeepCoder) or trigger long autonomous boost workflows.
+- Always notify the user beforehand: ask clarifying questions, explain what needs to be done, and obtain the user's explicit alignment before initiating subagents.
+- Favor direct, transparent execution in the main conversation for fast turnaround.
