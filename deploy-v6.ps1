@@ -7,6 +7,10 @@ New-Item -ItemType Directory -Path $dest -Force | Out-Null
 Write-Host "Copying build files..."
 Copy-Item "C:\lmms\lmms-repo\build\*.exe" -Destination $dest
 Copy-Item "C:\lmms\lmms-repo\build\*.dll" -Destination $dest
+if (Test-Path "C:\lmms\lmms-repo\build\vcpkg_installed\x64-windows\bin") {
+    Write-Host "Copying vcpkg runtime dependencies (zlib, fluidsynth, etc.)..."
+    Copy-Item "C:\lmms\lmms-repo\build\vcpkg_installed\x64-windows\bin\*.dll" -Destination $dest -Force
+}
 Copy-Item -Recurse "C:\lmms\lmms-repo\build\plugins" -Destination $dest
 if (Test-Path "C:\lmms\lmms-repo\data") {
     Copy-Item -Recurse "C:\lmms\lmms-repo\data" -Destination $dest
