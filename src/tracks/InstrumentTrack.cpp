@@ -1214,6 +1214,8 @@ void InstrumentTrack::autoAssignMidiDevice(bool assign)
 
 void InstrumentTrack::randomizeParameters(bool randomizePitch)
 {
+	addJournalCheckPoint();
+
 	if (randomizePitch)
 	{
 		m_pitchModel.setValue(static_cast<float>((rand() % 25 - 12) * 100));
@@ -1279,6 +1281,23 @@ void InstrumentTrack::randomizeParameters(bool randomizePitch)
 					// Ensure cutoff is between 25% and 100% of range so filter isn't muffled
 					float r = 0.25f + 0.75f * (static_cast<float>(rand()) / static_cast<float>(RAND_MAX));
 					fm->setValue(minVal + r * (maxVal - minVal));
+				}
+			}
+			continue;
+		}
+
+		if (name.contains("resonance") || name.contains("filter q") || name.contains("res") || name == "q")
+		{
+			if (auto fm = m->dynamicCast<FloatModel>())
+			{
+				float minVal = fm->minValue();
+				float maxVal = fm->maxValue();
+				if (std::isfinite(minVal) && std::isfinite(maxVal) && maxVal > minVal)
+				{
+					// Cap resonance at 70% of range to prevent ear-damaging volume spikes or speaker distortion
+					float maxSafe = minVal + 0.70f * (maxVal - minVal);
+					float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+					fm->setValue(minVal + r * (maxSafe - minVal));
 				}
 			}
 			continue;
