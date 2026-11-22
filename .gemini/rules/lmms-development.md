@@ -34,7 +34,8 @@ globs: **/*
 - **Git Repositories:** Before beginning any bug analysis, code changes, or computations, **ALWAYS** check recent git commits (`git log -n 5`) and `git status`. In multi-window/collaborative environments, another session or process may have already resolved or committed the fix.
 - **Non-Git Projects:** Always check the local machine state: verify existing output files, build artifacts, recent edits, and active background processes before starting work.
 
-## 8. "Ask First, Then Create" for Boost / DeepCoder
+## 8. "Ask First, Then Create" & Proactive Recommendations for Boost / Teamwork
 - **NEVER** silently or automatically spawn heavy subagents (such as DeepCoder) or trigger long autonomous boost workflows.
 - Always notify the user beforehand: ask clarifying questions, explain what needs to be done, and obtain the user's explicit alignment before initiating subagents.
+- **Proactive Suggestions:** Whenever a task is complex, multi-modular, architectural, or would significantly benefit from `/boost` or `/teamwork`, PROACTIVELY recommend it to the user immediately and ask if they wish to activate it.
 - Favor direct, transparent execution in the main conversation for fast turnaround.
