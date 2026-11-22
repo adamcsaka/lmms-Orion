@@ -27,7 +27,10 @@
 #include "AutomationClip.h"
 #include "ConfigManager.h"
 #include "ControllerConnection.h"
+#include "AudioBusHandle.h"
 #include "DataFile.h"
+#include "Effect.h"
+#include "EffectChain.h"
 #include "GuiApplication.h"
 #include "Mixer.h"
 #include "InstrumentTrackView.h"
@@ -1158,6 +1161,65 @@ void InstrumentTrack::autoAssignMidiDevice(bool assign)
 	{
 		m_midiPort.subscribeReadablePort(device, assign);
 		m_hasAutoMidiDev = assign;
+	}
+}
+
+
+void InstrumentTrack::randomizeParameters()
+{
+	m_pitchModel.setValue(static_cast<float>((rand() % 25 - 12) * 100));
+	m_panningModel.setValue(static_cast<float>((rand() % 161) - 80));
+
+	const auto models = findChildren<AutomatableModel*>();
+	for (auto* m : models)
+	{
+		if (!m || m == &m_pitchModel || m == &m_volumeModel || m == &m_panningModel) { continue; }
+		if (auto fm = m->dynamicCast<FloatModel>())
+		{
+			float minVal = fm->minValue();
+			float maxVal = fm->maxValue();
+			if (std::isfinite(minVal) && std::isfinite(maxVal) && maxVal > minVal)
+			{
+				float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+				fm->setValue(minVal + r * (maxVal - minVal));
+			}
+		}
+		else if (auto im = m->dynamicCast<IntModel>())
+		{
+			int minVal = im->minValue();
+			int maxVal = im->maxValue();
+			if (maxVal > minVal && (maxVal - minVal) <= 64)
+			{
+				im->setValue(minVal + (rand() % (maxVal - minVal + 1)));
+			}
+		}
+	}
+
+	if (audioBusHandle() && audioBusHandle()->effects())
+	{
+		for (Effect* e : audioBusHandle()->effects()->effects())
+		{
+			if (!e) { continue; }
+			const auto fxModels = e->findChildren<AutomatableModel*>();
+			for (auto* fm_obj : fxModels)
+			{
+				if (auto fm = fm_obj->dynamicCast<FloatModel>())
+				{
+					float minVal = fm->minValue();
+					float maxVal = fm->maxValue();
+					if (std::isfinite(minVal) && std::isfinite(maxVal) && maxVal > minVal)
+					{
+						float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+						fm->setValue(minVal + r * (maxVal - minVal));
+					}
+				}
+			}
+		}
+	}
+
+	if (Engine::getSong())
+	{
+		Engine::getSong()->setModified();
 	}
 }
 

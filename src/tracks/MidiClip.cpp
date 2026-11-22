@@ -134,21 +134,44 @@ void MidiClip::updateLength()
 	// If the clip hasn't already been manually resized, automatically resize it.
 	if (getAutoResize())
 	{
+		// Find maximum note tick across all notes in clip
+		tick_t max_note_tick = 0;
+		for (const auto& note : m_notes)
+		{
+			if (note->type() == Note::Type::Step)
+			{
+				max_note_tick = std::max<tick_t>(max_note_tick, note->pos() + 1);
+			}
+			else if (note->length() > 0)
+			{
+				max_note_tick = std::max<tick_t>(max_note_tick, note->endPos());
+			}
+		}
+
+		const float ticksPerStep = static_cast<float>(TimePos::ticksPerBar()) / TimePos::stepsPerBar();
+		if (max_note_tick > 0 && ticksPerStep > 0.0f)
+		{
+			float neededSteps = static_cast<float>(max_note_tick) / ticksPerStep;
+			if (neededSteps > fractionalSteps())
+			{
+				m_fractionalSteps = neededSteps;
+				m_steps = std::max(1, static_cast<int>(std::ceil(neededSteps)));
+			}
+		}
+
 		if (m_instrumentTrack->trackContainer()->type() == TrackContainer::Type::Pattern)
 		{
 			changeLength(beatClipLength());
 			updatePatternTrack();
 			return;
 		}
-		tick_t max_length = TimePos::ticksPerBar();
 
-		for (const auto& note : m_notes)
+		tick_t max_length = TimePos::ticksPerBar();
+		if (max_note_tick > 0)
 		{
-			if (note->length() > 0)
-			{
-				max_length = std::max<tick_t>(max_length, note->endPos());
-			}
+			max_length = std::max<tick_t>(max_length, max_note_tick);
 		}
+
 		changeLength( TimePos( max_length ).nextFullBar() *
 							TimePos::ticksPerBar() );
 		setStartTimeOffset(TimePos(0));
@@ -161,23 +184,6 @@ void MidiClip::updateLength()
 
 TimePos MidiClip::beatClipLength() const
 {
-	if (m_fractionalSteps > 0.0f)
-	{
-		tick_t stepTicks = static_cast<tick_t>(m_fractionalSteps * TimePos::ticksPerBar() / TimePos::stepsPerBar());
-		if (stepTicks > 0)
-		{
-			return TimePos{stepTicks};
-		}
-	}
-	else if (m_steps > 0)
-	{
-		tick_t stepTicks = static_cast<tick_t>(m_steps * TimePos::ticksPerBar() / TimePos::stepsPerBar());
-		if (stepTicks > 0)
-		{
-			return TimePos{stepTicks};
-		}
-	}
-
 	tick_t max_length = 0;
 
 	for (const auto& note : m_notes)
@@ -191,6 +197,18 @@ TimePos MidiClip::beatClipLength() const
 			max_length = std::max<tick_t>(max_length, note->endPos());
 		}
 	}
+
+	tick_t stepTicks = 0;
+	if (m_fractionalSteps > 0.0f)
+	{
+		stepTicks = static_cast<tick_t>(std::round(m_fractionalSteps * TimePos::ticksPerBar() / TimePos::stepsPerBar()));
+	}
+	else if (m_steps > 0)
+	{
+		stepTicks = static_cast<tick_t>(m_steps * TimePos::ticksPerBar() / TimePos::stepsPerBar());
+	}
+
+	max_length = std::max(max_length, stepTicks);
 
 	return TimePos{max_length > 0 ? max_length : TimePos::ticksPerBar()};
 }
@@ -276,6 +294,7 @@ void MidiClip::rearrangeAllNotes()
 {
 	// sort notes by start time
 	std::sort(m_notes.begin(), m_notes.end(), Note::lessThan);
+	updateLength();
 }
 
 
@@ -705,6 +724,10 @@ void MidiClip::duplicateContent()
 		m_notes.push_back(n);
 	}
 
+	if (m_fractionalSteps > 0.0f)
+	{
+		m_fractionalSteps *= 2.0f;
+	}
 	if (m_steps > 0)
 	{
 		m_steps *= 2;
@@ -731,6 +754,10 @@ void MidiClip::scaleContent(float percentage)
 		}
 	}
 
+	if (m_fractionalSteps > 0.0f)
+	{
+		m_fractionalSteps = std::max(0.25f, m_fractionalSteps * ratio);
+	}
 	if (m_steps > 0)
 	{
 		m_steps = std::max(1, static_cast<int>(std::round(m_steps * ratio)));

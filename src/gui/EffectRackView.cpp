@@ -35,6 +35,7 @@
 #include <QDomDocument>
 #include <QKeyEvent>
 #include <QFile>
+#include <QInputDialog>
 #include <QTextStream>
 
 #include "CaptionMenu.h"
@@ -45,6 +46,7 @@
 #include "EffectSelectDialog.h"
 #include "EffectView.h"
 #include "GroupBox.h"
+#include "TextFloat.h"
 
 
 namespace lmms::gui
@@ -96,6 +98,13 @@ EffectRackView::EffectRackView( EffectChain* model, QWidget* parent ) :
 	loadButton->setFocusPolicy(Qt::NoFocus);
 	connect( loadButton, SIGNAL(clicked()), this, SLOT(loadEffectChain()));
 	btnLayout->addWidget( loadButton );
+
+	auto randomizeButton = new QPushButton;
+	randomizeButton->setText( tr( "Random FX" ) );
+	randomizeButton->setToolTip( tr( "Generate and randomize effects in this rack (specify count)" ) );
+	randomizeButton->setFocusPolicy(Qt::NoFocus);
+	connect( randomizeButton, SIGNAL(clicked()), this, SLOT(randomizeEffects()));
+	btnLayout->addWidget( randomizeButton );
 
 	effectsLayout->addLayout( btnLayout );
 
@@ -438,9 +447,76 @@ void EffectRackView::contextMenuEvent( QContextMenuEvent* event )
 	contextMenu->addAction( embed::getIconPixmap( "file_save" ), tr( "&Save effect group..." ), this, SLOT(saveEffectChain()) );
 	contextMenu->addAction( embed::getIconPixmap( "file_open" ), tr( "&Load effect group..." ), this, SLOT(loadEffectChain()) );
 	contextMenu->addSeparator();
+	contextMenu->addAction( embed::getIconPixmap( "arp_random" ), tr( "&Randomize effect rack..." ), this, SLOT(randomizeEffects()) );
+	contextMenu->addSeparator();
 	contextMenu->addAction( embed::getIconPixmap( "cancel" ), tr( "&Clear all effects" ), this, SLOT(clearViews()) );
 	contextMenu->exec( QCursor::pos() );
 	delete contextMenu;
+}
+
+void EffectRackView::randomizeEffects()
+{
+	if (!fxChain()) { return; }
+
+	bool ok = false;
+	int count = QInputDialog::getInt(
+		this,
+		tr("Randomize Effect Rack"),
+		tr("Number of random effects to generate:"),
+		3, 1, 10, 1, &ok);
+	if (!ok || count <= 0) { return; }
+
+	const char* fxPlugins[] = {
+		"amplifier", "bassbooster", "bitcrush", "crossovereq", "delay",
+		"dispersion", "dualfilter", "dynamicsprocessor", "eq", "flanger",
+		"frequencyshifter", "multitapecho", "reverbsc", "slewdistortion",
+		"stereomatrix", "waveshaper"
+	};
+	const int numFx = sizeof(fxPlugins) / sizeof(fxPlugins[0]);
+
+	clearViews();
+
+	for (int i = 0; i < count; ++i)
+	{
+		const char* chosenFx = fxPlugins[rand() % numFx];
+		Effect* e = Effect::instantiate(QString::fromUtf8(chosenFx), fxChain(), nullptr);
+		if (e && e->isOkay())
+		{
+			fxChain()->appendEffect(e);
+			const auto fxModels = e->findChildren<AutomatableModel*>();
+			for (auto* fm_obj : fxModels)
+			{
+				if (auto fm = fm_obj->dynamicCast<FloatModel>())
+				{
+					float minVal = fm->minValue();
+					float maxVal = fm->maxValue();
+					if (std::isfinite(minVal) && std::isfinite(maxVal) && maxVal > minVal)
+					{
+						float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+						fm->setValue(minVal + r * (maxVal - minVal));
+					}
+				}
+				else if (auto im = fm_obj->dynamicCast<IntModel>())
+				{
+					int minVal = im->minValue();
+					int maxVal = im->maxValue();
+					if (maxVal > minVal && (maxVal - minVal) <= 32)
+					{
+						im->setValue(minVal + (rand() % (maxVal - minVal + 1)));
+					}
+				}
+			}
+		}
+	}
+
+	update();
+
+	TextFloat::displayMessage(
+		tr("Effect Rack Randomized"),
+		tr("Generated and randomized %1 effect(s)!").arg(count),
+		embed::getIconPixmap("arp_random"),
+		2500
+	);
 }
 
 

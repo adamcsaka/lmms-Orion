@@ -77,6 +77,8 @@ SET(LMMS_PLUGIN_LIST
 	WaveShaper
 	Vectorscope
 	Vibed
+	Vital
+	OxoSynth
 	Xpressive
 	ZynAddSubFx
 )

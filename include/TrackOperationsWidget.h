@@ -63,6 +63,7 @@ protected:
 private slots:
 	void cloneTrack();  //!< Clone this track
 	void removeTrack(); //!< Remove this track from the track list
+	void randomizeInstrument(); //!< Randomize instrument parameters
 
 	//! @brief Update the trackOperationsWidget context menu
 	//!

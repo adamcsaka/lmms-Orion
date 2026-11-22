@@ -58,6 +58,7 @@
 #include "LedCheckBox.h"
 #include "LeftRightNav.h"
 #include "MainWindow.h"
+#include "TextFloat.h"
 #include "PianoView.h"
 #include "PluginFactory.h"
 #include "PluginView.h"
@@ -118,6 +119,24 @@ InstrumentTrackWindow::InstrumentTrackWindow( InstrumentTrackView * _itv ) :
 						SLOT(viewNextInstrument()));
 	// m_leftRightNav->setShortcuts();
 	nameAndChangeTrackLayout->addWidget(m_leftRightNav);
+
+	auto randBtn = new QPushButton(nameAndChangeTrackWidget);
+	randBtn->setIcon(embed::getIconPixmap("random_wave_active", 16, 16));
+	randBtn->setToolTip(tr("Randomize this instrument's parameters"));
+	randBtn->setFixedSize(22, 22);
+	connect(randBtn, &QPushButton::clicked, this, [this]() {
+		if (m_track)
+		{
+			m_track->randomizeParameters();
+			TextFloat::displayMessage(
+				tr("Instrument Randomized"),
+				tr("Randomized parameters for %1!").arg(m_track->name()),
+				embed::getIconPixmap("random_wave_active"),
+				2500
+			);
+		}
+	});
+	nameAndChangeTrackLayout->addWidget(randBtn);
 
 	nameAndChangeTrackWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 	generalSettingsLayout->addWidget( nameAndChangeTrackWidget );

@@ -57,6 +57,7 @@ public slots:
 	void pasteEffect();
 	void saveEffectChain();
 	void loadEffectChain();
+	void randomizeEffects();
 
 private slots:
 	virtual void update();
