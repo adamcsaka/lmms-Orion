@@ -22,6 +22,7 @@
 #include "ComboBox.h"
 #include "AudioEngine.h"
 #include "Engine.h"
+#include "InstrumentTrack.h"
 #include "Knob.h"
 #include "LedCheckBox.h"
 #include "NotePlayHandle.h"
@@ -897,4 +898,15 @@ void OxoSynthView::modelChanged()
 
 } // namespace gui
 
+extern "C"
+{
+
+PLUGIN_EXPORT Plugin * lmms_plugin_main( Model * m, void * )
+{
+	return new OxoSynthInstrument( static_cast<InstrumentTrack *>( m ) );
+}
+
+}
+
 } // namespace lmms
+

@@ -1173,10 +1173,88 @@ void InstrumentTrack::randomizeParameters(bool randomizePitch)
 	}
 	m_panningModel.setValue(static_cast<float>((rand() % 161) - 80));
 
-	const auto models = findChildren<AutomatableModel*>();
+	QList<AutomatableModel*> models = findChildren<AutomatableModel*>();
+	if (m_instrument)
+	{
+		models.append(m_instrument->findChildren<AutomatableModel*>());
+	}
+
 	for (auto* m : models)
 	{
 		if (!m || m == &m_pitchModel || m == &m_volumeModel || m == &m_panningModel) { continue; }
+
+		const QString name = m->displayName().toLower();
+		if (name.contains("master volume") || name.contains("master vol"))
+		{
+			if (auto fm = m->dynamicCast<FloatModel>())
+			{
+				fm->setValue(0.7f + 0.3f * (static_cast<float>(rand()) / RAND_MAX));
+			}
+			continue;
+		}
+
+		if (name.contains("osc 1 enabled") || name.contains("oscillator 1 enabled"))
+		{
+			if (auto bm = m->dynamicCast<BoolModel>())
+			{
+				bm->setValue(true);
+			}
+			continue;
+		}
+
+		if (!randomizePitch && (name.contains("coarse") || name.contains("semitone") || name.contains("octave") || name.contains("pitch")))
+		{
+			continue;
+		}
+
+		if (name.contains("cutoff"))
+		{
+			if (auto fm = m->dynamicCast<FloatModel>())
+			{
+				float minVal = fm->minValue();
+				float maxVal = fm->maxValue();
+				if (std::isfinite(minVal) && std::isfinite(maxVal) && maxVal > minVal)
+				{
+					// Ensure cutoff is between 25% and 100% of range so filter isn't muffled
+					float r = 0.25f + 0.75f * (static_cast<float>(rand()) / static_cast<float>(RAND_MAX));
+					fm->setValue(minVal + r * (maxVal - minVal));
+				}
+			}
+			continue;
+		}
+
+		if (name.contains("attack"))
+		{
+			if (auto fm = m->dynamicCast<FloatModel>())
+			{
+				float minVal = fm->minValue();
+				float maxVal = fm->maxValue();
+				if (std::isfinite(minVal) && std::isfinite(maxVal) && maxVal > minVal)
+				{
+					// Keep attack brisk (0 to 25% of range)
+					float r = 0.25f * (static_cast<float>(rand()) / static_cast<float>(RAND_MAX));
+					fm->setValue(minVal + r * (maxVal - minVal));
+				}
+			}
+			continue;
+		}
+
+		if (name.contains("osc 1 vol") || name.contains("osc 1 volume"))
+		{
+			if (auto fm = m->dynamicCast<FloatModel>())
+			{
+				float minVal = fm->minValue();
+				float maxVal = fm->maxValue();
+				if (std::isfinite(minVal) && std::isfinite(maxVal) && maxVal > minVal)
+				{
+					// Keep osc 1 volume at least 50%
+					float r = 0.5f + 0.5f * (static_cast<float>(rand()) / static_cast<float>(RAND_MAX));
+					fm->setValue(minVal + r * (maxVal - minVal));
+				}
+			}
+			continue;
+		}
+
 		if (auto fm = m->dynamicCast<FloatModel>())
 		{
 			float minVal = fm->minValue();
@@ -1195,6 +1273,10 @@ void InstrumentTrack::randomizeParameters(bool randomizePitch)
 			{
 				im->setValue(minVal + (rand() % (maxVal - minVal + 1)));
 			}
+		}
+		else if (auto bm = m->dynamicCast<BoolModel>())
+		{
+			bm->setValue((rand() % 2) == 1);
 		}
 	}
 

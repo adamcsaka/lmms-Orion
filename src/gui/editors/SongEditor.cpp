@@ -34,7 +34,9 @@
 #include <QScrollBar>
 #include <QSlider>
 #include <QTimeLine>
+#include <QToolButton>
 
+#include "RandomInstrumentationDialog.h"
 #include "ActionGroup.h"
 #include "AudioDevice.h"
 #include "AudioEngine.h"
@@ -977,70 +979,28 @@ SongEditorWindow::SongEditorWindow(Song* song) :
 		TextFloat::displayMessage(tr("Cleaned Automation"), tr("Removed %1 unused automation track(s) from Song Editor.").arg(count), embed::getIconPixmap("edit_delete"), 2500);
 	});
 
-	auto genRandomInstrumentationAction = trackActionsToolBar->addAction(
-		embed::getIconPixmap("arp_random"), tr("Generate Random Instrumentation..."));
-	genRandomInstrumentationAction->setToolTip(tr("Generate randomized synth instrument tracks with DSP effects (specify count)"));
-	connect(genRandomInstrumentationAction, &QAction::triggered, [this]() {
-		bool ok = false;
-		int numTracks = QInputDialog::getInt(
-			this,
-			tr("Generate Random Instrumentation"),
-			tr("Number of instrument tracks to generate:"),
-			4, 1, 32, 1, &ok);
-		if (!ok || numTracks <= 0) { return; }
+	trackActionsToolBar->addSeparator();
 
-		const char* synthPlugins[] = {
-			"tripleoscillator", "bitinvader", "monstro", "watsyn",
-			"organic", "freeboy", "nes", "kicker", "sfxr", "vibed", "lb302",
-			"vital", "oxosynth"
-		};
-		const int numPlugins = sizeof(synthPlugins) / sizeof(synthPlugins[0]);
-
-		const char* fxPlugins[] = {
-			"delay", "dualfilter", "flanger", "bitcrush", "reverbsc", "stereomatrix", "waveshaper"
-		};
-		const int numFx = sizeof(fxPlugins) / sizeof(fxPlugins[0]);
-
-		for (int i = 0; i < numTracks; ++i)
+	auto genRandomBtn = new QToolButton(m_toolBar);
+	genRandomBtn->setText(tr("Random Synths..."));
+	genRandomBtn->setIcon(embed::getIconPixmap("arp_random"));
+	genRandomBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+	genRandomBtn->setToolTip(tr("Generate randomized synth instrument tracks with specified instrument & effect count"));
+	connect(genRandomBtn, &QToolButton::clicked, [this]() {
+		RandomInstrumentationDialog dlg(this);
+		if (dlg.exec() == QDialog::Accepted)
 		{
-			auto track = Track::create(Track::Type::Instrument, m_editor->m_song);
-			auto it = dynamic_cast<InstrumentTrack*>(track);
-			if (!it) { continue; }
-
-			const char* chosenSynth = synthPlugins[rand() % numPlugins];
-			it->loadInstrument(chosenSynth);
-			it->setName(QString("%1 (Synth %2)").arg(it->instrumentName()).arg(i + 1));
-
-			if (it->audioBusHandle() && it->audioBusHandle()->effects())
-			{
-				int numEffectsToGen = 1 + (rand() % 2); // 1 to 2 effects
-				for (int eIdx = 0; eIdx < numEffectsToGen; ++eIdx)
-				{
-					const char* chosenFx = fxPlugins[rand() % numFx];
-					Effect* e = Effect::instantiate(QString::fromUtf8(chosenFx), it->audioBusHandle()->effects(), nullptr);
-					if (e && e->isOkay())
-					{
-						it->audioBusHandle()->effects()->appendEffect(e);
-					}
-				}
-			}
-
-			it->randomizeParameters(false);
-			it->volumeModel()->setValue(75.0f + static_cast<float>(rand() % 30));
+			generateRandomInstrumentation(m_editor->m_song, dlg.instrumentCount(), dlg.effectCount());
 		}
-
-		TextFloat::displayMessage(
-			tr("Random Instrumentation"),
-			tr("Generated %1 randomized instrument tracks with DSP effects!").arg(numTracks),
-			embed::getIconPixmap("arp_random"),
-			3000
-		);
 	});
+	trackActionsToolBar->addWidget(genRandomBtn);
 
-	auto randomizeAllAction = trackActionsToolBar->addAction(
-		embed::getIconPixmap("random_wave_active"), tr("Randomize All Instruments"));
-	randomizeAllAction->setToolTip(tr("Randomize knobs, sliders, and pitch across all instruments"));
-	connect(randomizeAllAction, &QAction::triggered, [this]() {
+	auto randomizeAllBtn = new QToolButton(m_toolBar);
+	randomizeAllBtn->setText(tr("Randomize All"));
+	randomizeAllBtn->setIcon(embed::getIconPixmap("random_wave_active"));
+	randomizeAllBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+	randomizeAllBtn->setToolTip(tr("Randomize knobs, sliders, and synth parameters across all instruments"));
+	connect(randomizeAllBtn, &QToolButton::clicked, [this]() {
 		auto randomizeTrackList = [](const TrackContainer::TrackList& tl) {
 			for (Track* t : tl)
 			{
@@ -1055,11 +1015,12 @@ SongEditorWindow::SongEditorWindow(Song* song) :
 
 		TextFloat::displayMessage(
 			tr("Instruments Randomized"),
-			tr("Randomized knobs, sliders, and pitch across all instruments!"),
+			tr("Randomized knobs, sliders, and synth parameters across all instruments!"),
 			embed::getIconPixmap("random_wave_active"),
 			2500
 		);
 	});
+	trackActionsToolBar->addWidget(randomizeAllBtn);
 
 
 	// Edit actions

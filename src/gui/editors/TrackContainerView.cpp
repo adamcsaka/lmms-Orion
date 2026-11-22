@@ -37,6 +37,8 @@
 #include "ImportFilter.h"
 #include "Instrument.h"
 #include "InstrumentTrack.h"
+#include "InstrumentTrackView.h"
+#include "InstrumentTrackWindow.h"
 #include "PatternTrack.h"
 #include "Song.h"
 #include "StringPairDrag.h"
@@ -394,8 +396,20 @@ void TrackContainerView::dropEvent( QDropEvent * _de )
 	{
 		auto it = dynamic_cast<InstrumentTrack*>(Track::create(Track::Type::Instrument, m_tc));
 		auto ilt = new InstrumentLoaderThread(this, it, value);
+		connect(ilt, &QThread::finished, [this, it]() {
+			for (TrackView* tv : trackViews())
+			{
+				if (tv && tv->getTrack() == it)
+				{
+					if (auto itv = dynamic_cast<InstrumentTrackView*>(tv))
+					{
+						itv->getInstrumentTrackWindow()->toggleVisibility(true);
+					}
+					break;
+				}
+			}
+		});
 		ilt->start();
-		//it->toggledInstrumentTrackButton( true );
 		_de->accept();
 	}
 	else if( type == "samplefile" || type == "pluginpresetfile"

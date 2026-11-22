@@ -26,8 +26,10 @@
 
 #include <QAction>
 #include <QActionGroup>
+#include <QToolButton>
 #include <QVBoxLayout>
 
+#include "RandomInstrumentationDialog.h"
 #include "ClipView.h"
 #include "ComboBox.h"
 #include "DataFile.h"
@@ -375,6 +377,49 @@ PatternEditorWindow::PatternEditorWindow(PatternStore* ps) :
 			getGUI()->mainWindow()->exportPattern();
 		}
 	});
+
+	trackAndStepActionsToolBar->addSeparator();
+
+	auto genRandomBtn = new QToolButton(m_toolBar);
+	genRandomBtn->setText(tr("Random Synths..."));
+	genRandomBtn->setIcon(embed::getIconPixmap("arp_random"));
+	genRandomBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+	genRandomBtn->setToolTip(tr("Generate randomized synth instrument tracks with specified instrument & effect count into Pattern Editor"));
+	connect(genRandomBtn, &QToolButton::clicked, [this, ps]() {
+		RandomInstrumentationDialog dlg(this);
+		if (dlg.exec() == QDialog::Accepted)
+		{
+			generateRandomInstrumentation(ps, dlg.instrumentCount(), dlg.effectCount());
+		}
+	});
+	trackAndStepActionsToolBar->addWidget(genRandomBtn);
+
+	auto randomizeAllBtn = new QToolButton(m_toolBar);
+	randomizeAllBtn->setText(tr("Randomize All"));
+	randomizeAllBtn->setIcon(embed::getIconPixmap("random_wave_active"));
+	randomizeAllBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+	randomizeAllBtn->setToolTip(tr("Randomize knobs, sliders, and synth parameters across all instruments"));
+	connect(randomizeAllBtn, &QToolButton::clicked, [this]() {
+		auto randomizeTrackList = [](const TrackContainer::TrackList& tl) {
+			for (Track* t : tl)
+			{
+				auto it = dynamic_cast<InstrumentTrack*>(t);
+				if (!it) { continue; }
+				it->randomizeParameters(true);
+			}
+		};
+
+		randomizeTrackList(Engine::getSong()->tracks());
+		randomizeTrackList(Engine::patternStore()->tracks());
+
+		TextFloat::displayMessage(
+			tr("Instruments Randomized"),
+			tr("Randomized knobs, sliders, and synth parameters across all instruments!"),
+			embed::getIconPixmap("random_wave_active"),
+			2500
+		);
+	});
+	trackAndStepActionsToolBar->addWidget(randomizeAllBtn);
 
 	auto stretch = new QWidget(m_toolBar);
 	stretch->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);

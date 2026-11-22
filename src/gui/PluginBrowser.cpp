@@ -35,8 +35,12 @@
 
 #include "embed.h"
 #include "Engine.h"
+#include "GuiApplication.h"
 #include "InstrumentTrack.h"
+#include "InstrumentTrackView.h"
+#include "InstrumentTrackWindow.h"
 #include "Song.h"
+#include "SongEditor.h"
 #include "StringPairDrag.h"
 #include "TrackContainerView.h"
 #include "PluginFactory.h"
@@ -294,12 +298,21 @@ void PluginDescWidget::mousePressEvent( QMouseEvent * _me )
 }
 
 
+void PluginDescWidget::mouseDoubleClickEvent( QMouseEvent * _me )
+{
+	if ( _me->button() == Qt::LeftButton )
+	{
+		openInNewInstrumentTrack( QString::fromUtf8(m_pluginKey.desc->name) );
+	}
+}
+
+
 void PluginDescWidget::contextMenuEvent(QContextMenuEvent* e)
 {
 	QMenu contextMenu(this);
 	contextMenu.addAction(
 		tr("Send to new instrument track"),
-		[=, this]{ openInNewInstrumentTrack(m_pluginKey.desc->name); }
+		[=, this]{ openInNewInstrumentTrack(QString::fromUtf8(m_pluginKey.desc->name)); }
 	);
 	contextMenu.exec(e->globalPos());
 }
@@ -310,6 +323,22 @@ void PluginDescWidget::openInNewInstrumentTrack(QString value)
 	TrackContainer* tc = Engine::getSong();
 	auto it = dynamic_cast<InstrumentTrack*>(Track::create(Track::Type::Instrument, tc));
 	auto ilt = new InstrumentLoaderThread(this, it, value);
+	connect(ilt, &QThread::finished, [it]() {
+		if (getGUI() && getGUI()->songEditor() && getGUI()->songEditor()->m_editor)
+		{
+			for (TrackView* tv : getGUI()->songEditor()->m_editor->trackViews())
+			{
+				if (tv && tv->getTrack() == it)
+				{
+					if (auto itv = dynamic_cast<InstrumentTrackView*>(tv))
+					{
+						itv->getInstrumentTrackWindow()->toggleVisibility(true);
+					}
+					break;
+				}
+			}
+		}
+	});
 	ilt->start();
 }
 

@@ -72,6 +72,7 @@ protected:
 #endif
 	void leaveEvent( QEvent * _e ) override;
 	void mousePressEvent( QMouseEvent * _me ) override;
+	void mouseDoubleClickEvent( QMouseEvent * _me ) override;
 	void paintEvent( QPaintEvent * _pe ) override;
 	void contextMenuEvent(QContextMenuEvent* e) override;
 
