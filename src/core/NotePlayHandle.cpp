@@ -87,6 +87,19 @@ NotePlayHandle::NotePlayHandle( InstrumentTrack* instrumentTrack,
 	{
 		m_baseDetuning = new BaseDetuning(detuning().get());
 		m_instrumentTrack->m_processHandles.push_back( this );
+
+		const int maxPoly = m_instrumentTrack->maxPolyphony();
+		if( maxPoly > 0 )
+		{
+			while( m_instrumentTrack->m_processHandles.size() > static_cast<size_t>(maxPoly) )
+			{
+				NotePlayHandle* oldest = m_instrumentTrack->m_processHandles.front();
+				if( oldest == this ) { break; }
+				oldest->forceRelease();
+				m_instrumentTrack->m_processHandles.pop_front();
+				break;
+			}
+		}
 	}
 	else
 	{
@@ -366,6 +379,20 @@ bool NotePlayHandle::isFromTrack( const Track * _track ) const
 }
 
 
+
+
+void NotePlayHandle::forceRelease()
+{
+	m_released = true;
+	m_framesBeforeRelease = 0;
+	m_releaseFramesToDo = std::min<f_cnt_t>(m_releaseFramesToDo, 256);
+	for( NotePlayHandle* n : m_subNotes )
+	{
+		n->lock();
+		n->forceRelease();
+		n->unlock();
+	}
+}
 
 
 void NotePlayHandle::noteOff( const f_cnt_t _s )

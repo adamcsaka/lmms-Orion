@@ -389,7 +389,7 @@ PatternEditorWindow::PatternEditorWindow(PatternStore* ps) :
 		RandomInstrumentationDialog dlg(this);
 		if (dlg.exec() == QDialog::Accepted)
 		{
-			generateRandomInstrumentation(ps, dlg.instrumentCount(), dlg.effectCount());
+			generateRandomInstrumentation(ps, dlg.instrumentCount(), dlg.effectCount(), dlg.polyphonyCount());
 		}
 	});
 	trackAndStepActionsToolBar->addWidget(genRandomBtn);

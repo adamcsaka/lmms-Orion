@@ -130,6 +130,9 @@ public:
 	/*! Releases the note (and plays release frames) */
 	void noteOff( const f_cnt_t offset = 0 );
 
+	/*! Immediately fades out and terminates note to steal voice for polyphony limit */
+	void forceRelease();
+
 	/*! Returns number of frames to be played until the note is going to be released */
 	f_cnt_t framesBeforeRelease() const
 	{

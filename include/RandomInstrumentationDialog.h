@@ -40,6 +40,8 @@ public:
 		if (initialInstruments < 1 || initialInstruments > 32) { initialInstruments = 4; }
 		int initialEffects = ConfigManager::inst()->value("ui", "random_effect_count", "2").toInt();
 		if (initialEffects < 0 || initialEffects > 10) { initialEffects = 2; }
+		int initialPolyphony = ConfigManager::inst()->value("ui", "random_polyphony_count", "16").toInt();
+		if (initialPolyphony < 1 || initialPolyphony > 64) { initialPolyphony = 16; }
 
 		auto formLayout = new QFormLayout();
 		m_numInstrumentsSpin = new QSpinBox(this);
@@ -52,12 +54,19 @@ public:
 		m_numEffectsSpin->setValue(initialEffects);
 		formLayout->addRow(tr("Number of DSP effects per instrument:"), m_numEffectsSpin);
 
+		m_polyphonySpin = new QSpinBox(this);
+		m_polyphonySpin->setRange(1, 32);
+		m_polyphonySpin->setValue(initialPolyphony);
+		m_polyphonySpin->setToolTip(tr("Maximum voices per instrument to protect CPU (1 = Mono, 16 = standard polyphonic)"));
+		formLayout->addRow(tr("Max polyphony voices per track:"), m_polyphonySpin);
+
 		mainLayout->addLayout(formLayout);
 
 		auto buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
 		connect(buttonBox, &QDialogButtonBox::accepted, this, [this]() {
 			ConfigManager::inst()->setValue("ui", "random_instrument_count", QString::number(m_numInstrumentsSpin->value()));
 			ConfigManager::inst()->setValue("ui", "random_effect_count", QString::number(m_numEffectsSpin->value()));
+			ConfigManager::inst()->setValue("ui", "random_polyphony_count", QString::number(m_polyphonySpin->value()));
 			accept();
 		});
 		connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
@@ -66,18 +75,21 @@ public:
 
 	int instrumentCount() const { return m_numInstrumentsSpin->value(); }
 	int effectCount() const { return m_numEffectsSpin->value(); }
+	int polyphonyCount() const { return m_polyphonySpin->value(); }
 
 private:
 	QSpinBox* m_numInstrumentsSpin;
 	QSpinBox* m_numEffectsSpin;
+	QSpinBox* m_polyphonySpin;
 };
 
-inline void generateRandomInstrumentation(TrackContainer* container, int numTracks, int numEffects)
+inline void generateRandomInstrumentation(TrackContainer* container, int numTracks, int numEffects, int maxPolyphony = 16)
 {
 	if (!container || numTracks <= 0) { return; }
 
+	// Only rock-solid, fully native LMMS synthesizers (excluding experimental or crash-prone plugins)
 	const char* synthPlugins[] = {
-		"vital", "oxosynth", "tripleoscillator", "bitinvader", "monstro", "watsyn",
+		"tripleoscillator", "bitinvader", "monstro", "watsyn",
 		"organic", "freeboy", "nes", "kicker", "sfxr", "vibed", "lb302"
 	};
 	const int numPlugins = sizeof(synthPlugins) / sizeof(synthPlugins[0]);
@@ -112,6 +124,7 @@ inline void generateRandomInstrumentation(TrackContainer* container, int numTrac
 		}
 
 		it->randomizeParameters(false);
+		it->maxPolyphonyModel()->setValue(maxPolyphony);
 		it->setMuted(false);
 		it->setSolo(false);
 		it->volumeModel()->setValue(75.0f + static_cast<float>(rand() % 25));

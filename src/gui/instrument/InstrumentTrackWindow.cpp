@@ -232,6 +232,17 @@ InstrumentTrackWindow::InstrumentTrackWindow(InstrumentTrackView* _itv)
 	basicControlsLayout->addWidget(m_midiGroupLabel, 1, 8);
 	basicControlsLayout->setAlignment(m_midiGroupLabel, labelAlignment);
 
+	// setup spinbox for Max Polyphony (Voice limit to protect CPU)
+	m_maxPolyphonyNumber = new LcdSpinBox(2, nullptr, tr("Max Polyphony (Voice limit to protect CPU, 00 = unlimited)"));
+	m_maxPolyphonyNumber->addTextForValue(0, "oo");
+	basicControlsLayout->addWidget(m_maxPolyphonyNumber, 0, 9);
+	basicControlsLayout->setAlignment(m_maxPolyphonyNumber, widgetAlignment);
+
+	m_maxPolyphonyLabel = new QLabel(tr("POLY"), this);
+	m_maxPolyphonyLabel->setStyleSheet(labelStyleSheet);
+	basicControlsLayout->addWidget(m_maxPolyphonyLabel, 1, 9);
+	basicControlsLayout->setAlignment(m_maxPolyphonyLabel, labelAlignment);
+
 	auto saveSettingsBtn = new QPushButton(embed::getIconPixmap("project_save"), QString());
 	saveSettingsBtn->setMinimumSize(32, 32);
 
@@ -239,11 +250,11 @@ InstrumentTrackWindow::InstrumentTrackWindow(InstrumentTrackView* _itv)
 
 	saveSettingsBtn->setToolTip(tr("Save current instrument track settings in a preset file"));
 
-	basicControlsLayout->addWidget(saveSettingsBtn, 0, 9);
+	basicControlsLayout->addWidget(saveSettingsBtn, 0, 10);
 
 	label = new QLabel(tr("SAVE"), this);
 	label->setStyleSheet(labelStyleSheet);
-	basicControlsLayout->addWidget(label, 1, 9);
+	basicControlsLayout->addWidget(label, 1, 10);
 	basicControlsLayout->setAlignment(label, labelAlignment);
 
 	generalSettingsLayout->addLayout(basicControlsLayout);
@@ -357,6 +368,7 @@ void InstrumentTrackWindow::modelChanged()
 	m_panningKnob->setModel(&m_track->m_panningModel);
 	m_mixerChannelNumber->setModel(&m_track->m_mixerChannelModel);
 	m_midiGroupNumber->setModel(m_track->midiGroupModel());
+	m_maxPolyphonyNumber->setModel(m_track->maxPolyphonyModel());
 	m_pianoView->setModel(&m_track->m_piano);
 
 	if (m_track->instrument() && m_track->instrument()->isBendable())

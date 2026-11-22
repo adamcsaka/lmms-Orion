@@ -247,6 +247,21 @@ public:
 		return &m_midiGroupModel;
 	}
 
+	IntModel * maxPolyphonyModel()
+	{
+		return &m_maxPolyphonyModel;
+	}
+
+	const IntModel * maxPolyphonyModel() const
+	{
+		return &m_maxPolyphonyModel;
+	}
+
+	int maxPolyphony() const
+	{
+		return m_maxPolyphonyModel.value();
+	}
+
 	BoolModel* useMasterPitchModel()
 	{
 		return &m_useMasterPitchModel;
@@ -330,6 +345,7 @@ private:
 	IntModel m_pitchRangeModel;
 	IntModel m_mixerChannelModel;
 	IntModel m_midiGroupModel;
+	IntModel m_maxPolyphonyModel;
 	BoolModel m_useMasterPitchModel;
 
 	Instrument * m_instrument;

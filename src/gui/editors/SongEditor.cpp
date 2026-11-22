@@ -990,7 +990,7 @@ SongEditorWindow::SongEditorWindow(Song* song) :
 		RandomInstrumentationDialog dlg(this);
 		if (dlg.exec() == QDialog::Accepted)
 		{
-			generateRandomInstrumentation(m_editor->m_song, dlg.instrumentCount(), dlg.effectCount());
+			generateRandomInstrumentation(m_editor->m_song, dlg.instrumentCount(), dlg.effectCount(), dlg.polyphonyCount());
 		}
 	});
 	trackActionsToolBar->addWidget(genRandomBtn);

@@ -68,6 +68,7 @@ InstrumentTrack::InstrumentTrack(TrackContainer* tc) :
 	m_pitchRangeModel(1, 1, 60, this, tr("Pitch range")),
 	m_mixerChannelModel(0, 0, 0, this, tr("Mixer channel")),
 	m_midiGroupModel(0, 0, 16, this, tr("MIDI Group")),
+	m_maxPolyphonyModel(16, 0, 64, this, tr("Max polyphony")),
 	m_useMasterPitchModel(true, this, tr("Master pitch")),
 	m_instrument(nullptr),
 	m_soundShaping(this),
@@ -890,6 +891,7 @@ void InstrumentTrack::saveTrackSpecificSettings(QDomDocument& doc, QDomElement& 
 
 	m_mixerChannelModel.saveSettings( doc, thisElement, "mixch" );
 	m_midiGroupModel.saveSettings( doc, thisElement, "midigroup" );
+	m_maxPolyphonyModel.saveSettings( doc, thisElement, "polyphony" );
 	m_baseNoteModel.saveSettings( doc, thisElement, "basenote" );
 	m_firstKeyModel.saveSettings(doc, thisElement, "firstkey");
 	m_lastKeyModel.saveSettings(doc, thisElement, "lastkey");
@@ -963,6 +965,7 @@ void InstrumentTrack::loadTrackSpecificSettings( const QDomElement & thisElement
 	{
 		m_mixerChannelModel.loadSettings( thisElement, "mixch" );
 		m_midiGroupModel.loadSettings( thisElement, "midigroup" );
+		m_maxPolyphonyModel.loadSettings( thisElement, "polyphony" );
 	}
 	m_baseNoteModel.loadSettings( thisElement, "basenote" );
 	m_firstKeyModel.loadSettings(thisElement, "firstkey");
@@ -1184,7 +1187,7 @@ void InstrumentTrack::randomizeParameters(bool randomizePitch)
 		// Invariant: Never mute/solo tracks, never change track group, and never scramble mixer channel routing
 		if (!m || m == &m_pitchModel || m == &m_volumeModel || m == &m_panningModel ||
 			m == &m_mutedModel || m == &m_soloModel ||
-			m == &m_mixerChannelModel || m == &m_midiGroupModel ||
+			m == &m_mixerChannelModel || m == &m_midiGroupModel || m == &m_maxPolyphonyModel ||
 			m == &m_baseNoteModel || m == &m_firstKeyModel || m == &m_lastKeyModel)
 		{
 			continue;
@@ -1248,6 +1251,24 @@ void InstrumentTrack::randomizeParameters(bool randomizePitch)
 					// Keep attack brisk (0 to 25% of range)
 					float r = 0.25f * (static_cast<float>(rand()) / static_cast<float>(RAND_MAX));
 					fm->setValue(minVal + r * (maxVal - minVal));
+				}
+			}
+			continue;
+		}
+
+		if (name.contains("release") || name.contains("rel"))
+		{
+			if (auto fm = m->dynamicCast<FloatModel>())
+			{
+				float minVal = fm->minValue();
+				float maxVal = fm->maxValue();
+				if (std::isfinite(minVal) && std::isfinite(maxVal) && maxVal > minVal)
+				{
+					// Cap release to prevent excessive overlapping voices and runaway CPU load (max 25% or 1.2s)
+					float maxRel = std::min(maxVal, minVal + 0.25f * (maxVal - minVal));
+					if (maxRel > 1.2f && minVal < 1.2f) { maxRel = 1.2f; }
+					float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+					fm->setValue(minVal + r * (maxRel - minVal));
 				}
 			}
 			continue;
