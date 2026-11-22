@@ -65,6 +65,7 @@ NotePlayHandle::NotePlayHandle( InstrumentTrack* instrumentTrack,
 	m_releaseFramesDone( 0 ),
 	m_subNotes(),
 	m_released( false ),
+	m_forceFinished( false ),
 	m_releaseStarted( false ),
 	m_hasMidiNote( false ),
 	m_hasParent( parent != nullptr  ),
@@ -201,6 +202,12 @@ void NotePlayHandle::play( SampleFrame* _working_buffer )
 
 	lock();
 
+	if( m_forceFinished )
+	{
+		unlock();
+		return;
+	}
+
 	// Don't play the note if it falls outside of the user defined key range
 	// TODO: handle the range check by Microtuner, and if the key becomes "not mapped", save the current frequency
 	// so that the note release can finish playing using a valid frequency instead of a 1 Hz placeholder
@@ -251,9 +258,16 @@ void NotePlayHandle::play( SampleFrame* _working_buffer )
 		instrumentTrack()->isSustainPedalPressed() == false &&
 		m_totalFramesPlayed + framesThisPeriod > m_frames )
 	{
-		noteOff( m_totalFramesPlayed == 0
-			? ( m_frames + offset() ) // if we have noteon and noteoff during the same period, take offset in account for release frame
-			: ( m_frames - m_totalFramesPlayed ) ); // otherwise, the offset is already negated and can be ignored
+		f_cnt_t relOffset = 0;
+		if( m_totalFramesPlayed == 0 )
+		{
+			relOffset = m_frames + offset();
+		}
+		else if( m_frames > m_totalFramesPlayed )
+		{
+			relOffset = m_frames - m_totalFramesPlayed;
+		}
+		noteOff( relOffset );
 	}
 
 	// under some circumstances we're called even if there's nothing to play
@@ -331,6 +345,10 @@ void NotePlayHandle::play( SampleFrame* _working_buffer )
 
 f_cnt_t NotePlayHandle::framesLeft() const
 {
+	if( m_forceFinished )
+	{
+		return 0;
+	}
 	if( instrumentTrack()->isSustainPedalPressed() )
 	{
 		return 4 * Engine::audioEngine()->framesPerPeriod();
@@ -341,9 +359,11 @@ f_cnt_t NotePlayHandle::framesLeft() const
 	}
 	else if( m_released )
 	{
-		return m_framesBeforeRelease + m_releaseFramesToDo - m_releaseFramesDone;
+		const f_cnt_t totalRelease = m_framesBeforeRelease + m_releaseFramesToDo;
+		return ( m_releaseFramesDone >= totalRelease ) ? 0 : ( totalRelease - m_releaseFramesDone );
 	}
-	return m_frames+actualReleaseFramesToDo()-m_totalFramesPlayed;
+	const f_cnt_t total = m_frames + actualReleaseFramesToDo();
+	return ( m_totalFramesPlayed >= total ) ? 0 : ( total - m_totalFramesPlayed );
 }
 
 
@@ -364,6 +384,36 @@ f_cnt_t NotePlayHandle::framesLeftForCurrentPeriod() const
 bool NotePlayHandle::isFromTrack( const Track * _track ) const
 {
 	return m_instrumentTrack == _track || m_patternTrack == _track;
+}
+
+
+
+
+void NotePlayHandle::forceFinish()
+{
+	lock();
+	m_forceFinished = true;
+	m_released = true;
+	m_framesBeforeRelease = 0;
+	m_releaseFramesToDo = 0;
+	m_releaseFramesDone = 0;
+
+	if( m_hasMidiNote )
+	{
+		m_hasMidiNote = false;
+
+		// send MidiNoteOff event
+		m_instrumentTrack->processOutEvent(
+				MidiEvent( MidiNoteOff, midiChannel(), midiKey(), 0 ),
+				TimePos::fromFrames( 0, Engine::framesPerTick() ),
+				0 );
+	}
+
+	for( NotePlayHandle* n : m_subNotes )
+	{
+		n->forceFinish();
+	}
+	unlock();
 }
 
 

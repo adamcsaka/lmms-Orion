@@ -12,6 +12,9 @@ if (Test-Path "C:\lmms\lmms-repo\build\vcpkg_installed\x64-windows\bin") {
     Copy-Item "C:\lmms\lmms-repo\build\vcpkg_installed\x64-windows\bin\*.dll" -Destination $dest -Force
 }
 Copy-Item -Recurse "C:\lmms\lmms-repo\build\plugins" -Destination $dest
+
+# Remove experimental and crash-prone plugins as requested
+Remove-Item -Force -ErrorAction SilentlyContinue "$dest\plugins\vital.dll", "$dest\plugins\oxosynth.dll", "$dest\plugins\carlabase.dll", "$dest\plugins\carlarack.dll", "$dest\plugins\carlapatchbay.dll"
 if (Test-Path "C:\lmms\lmms-repo\data") {
     Copy-Item -Recurse "C:\lmms\lmms-repo\data" -Destination $dest
 }

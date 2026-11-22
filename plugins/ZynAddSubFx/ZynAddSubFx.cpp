@@ -490,6 +490,31 @@ gui::PluginView* ZynAddSubFxInstrument::instantiateView( QWidget * _parent )
 
 
 
+void ZynAddSubFxInstrument::randomize()
+{
+	// 1. Randomize basic GUI models (so the front panel knobs update visually)
+	m_filterFreqModel.setValue( 30 + ( rand() % 80 ) );
+	m_filterQModel.setValue( rand() % 90 );
+	m_bandwidthModel.setValue( 20 + ( rand() % 80 ) );
+	m_fmGainModel.setValue( rand() % 128 );
+	m_resCenterFreqModel.setValue( rand() % 128 );
+	m_resBandwidthModel.setValue( rand() % 128 );
+	m_portamentoModel.setValue( ( rand() % 10 < 3 ) ? ( rand() % 64 ) : 0 );
+
+	// 2. Randomize internal advanced synthesis parameters
+	m_pluginMutex.lock();
+	if( m_plugin )
+	{
+		m_plugin->randomize();
+	}
+	m_pluginMutex.unlock();
+
+	emit settingsChanged();
+}
+
+
+
+
 namespace gui
 {
 
@@ -541,7 +566,16 @@ ZynAddSubFxView::ZynAddSubFxView( Instrument * _instrument, QWidget * _parent ) 
 	connect( m_toggleUIButton, SIGNAL( toggled( bool ) ), this,
 							SLOT( toggleUI() ) );
 
-	l->addWidget( m_toggleUIButton, 0, 0, 1, 4 );
+	auto randBtn = new QPushButton( tr( "Randomize" ), this );
+	randBtn->setIcon( embed::getIconPixmap( "arp_random" ) );
+	randBtn->setFont( adjustedToPixelSize( f, DEFAULT_FONT_SIZE ) );
+	randBtn->setToolTip( tr( "Randomize basic controls and advanced internal synth parameters" ) );
+	connect( randBtn, &QPushButton::clicked, [this]() {
+		castModel<ZynAddSubFxInstrument>()->randomize();
+	} );
+
+	l->addWidget( m_toggleUIButton, 0, 0, 1, 2 );
+	l->addWidget( randBtn, 0, 2, 1, 2 );
 	l->setRowStretch( 1, 5 );
 	l->addWidget( m_portamento, 2, 0 );
 	l->addWidget( m_filterFreq, 2, 1 );

@@ -88,6 +88,8 @@ public:
 
 	gui::PluginView* instantiateView( QWidget * _parent ) override;
 
+	void randomize() override;
+
 
 private slots:
 	void reloadPlugin();

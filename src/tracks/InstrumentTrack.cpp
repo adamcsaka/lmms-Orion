@@ -706,22 +706,31 @@ void InstrumentTrack::enforcePolyphonyLimit( int maxVoices )
 {
 	if( maxVoices <= 0 ) { return; }
 
+	// First, prune handles that are already finished or null
+	for( auto it = m_processHandles.begin(); it != m_processHandles.end(); )
+	{
+		if( !(*it) || (*it)->isFinished() )
+		{
+			it = m_processHandles.erase( it );
+		}
+		else
+		{
+			++it;
+		}
+	}
+
 	while( m_processHandles.size() > static_cast<size_t>(maxVoices) )
 	{
 		NotePlayHandle* oldest = m_processHandles.front();
-		if( !oldest )
-		{
-			m_processHandles.pop_front();
-			continue;
-		}
-
-		if( oldest->midiKey() >= 0 && oldest->midiKey() < NumKeys && m_notes[oldest->midiKey()] == oldest )
-		{
-			m_notes[oldest->midiKey()] = nullptr;
-		}
-
-		oldest->forceRelease();
 		m_processHandles.pop_front();
+		if( oldest )
+		{
+			if( oldest->midiKey() >= 0 && oldest->midiKey() < NumKeys && m_notes[oldest->midiKey()] == oldest )
+			{
+				m_notes[oldest->midiKey()] = nullptr;
+			}
+			oldest->forceFinish();
+		}
 	}
 }
 
@@ -1376,6 +1385,11 @@ void InstrumentTrack::randomizeParameters(bool randomizePitch)
 	m_mutedModel.setValue(false);
 	setMuted(false);
 	m_soloModel.setValue(false);
+
+	if (m_instrument)
+	{
+		m_instrument->randomize();
+	}
 
 	if (Engine::getSong())
 	{

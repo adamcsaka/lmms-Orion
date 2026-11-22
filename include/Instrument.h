@@ -104,6 +104,9 @@ public:
 		return nullptr;
 	}
 
+	//! Randomizes internal synthesis parameters for instruments that support it
+	virtual void randomize() {}
+
 	// Get number of sample-frames that should be used when playing beat
 	// (note with unspecified length)
 	// Per default this function returns 0. In this case, channel is using
