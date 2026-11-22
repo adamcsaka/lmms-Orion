@@ -54,8 +54,7 @@ Plugin::Descriptor PLUGIN_EXPORT oxosynth_plugin_descriptor =
 
 OxoVoice::OxoVoice(sample_rate_t sampleRate, NotePlayHandle* nph) :
 	m_sampleRate(sampleRate > 0 ? sampleRate : 44100),
-	m_nph(nph),
-	m_delayBuffer(DELAY_BUFFER_SIZE, SampleFrame(0.0f, 0.0f))
+	m_nph(nph)
 {
 	m_osc1Phase = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
 	m_osc2Phase = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
@@ -351,6 +350,10 @@ void OxoVoice::render(SampleFrame* buffer, f_cnt_t offset, f_cnt_t frames, OxoSy
 		// Delay effect
 		if (delayTime > 0.01f && delayFb > 0.01f)
 		{
+			if (m_delayBuffer.empty())
+			{
+				m_delayBuffer.assign(DELAY_BUFFER_SIZE, SampleFrame(0.0f, 0.0f));
+			}
 			int delaySamples = std::clamp(static_cast<int>(delayTime * m_sampleRate), 1, DELAY_BUFFER_SIZE - 1);
 			int readPos = (m_delayWritePos - delaySamples + DELAY_BUFFER_SIZE) % DELAY_BUFFER_SIZE;
 			SampleFrame delayed = m_delayBuffer[readPos];
@@ -475,8 +478,6 @@ void OxoSynthInstrument::playNote(NotePlayHandle* n, SampleFrame* workingBuffer)
 	const f_cnt_t offset = n->noteOffset();
 
 	voice->render(workingBuffer, offset, frames, this);
-
-	applyRelease(workingBuffer, n);
 }
 
 void OxoSynthInstrument::deleteNotePluginData(NotePlayHandle* n)
@@ -490,7 +491,12 @@ void OxoSynthInstrument::deleteNotePluginData(NotePlayHandle* n)
 
 float OxoSynthInstrument::desiredReleaseTimeMs() const
 {
-	return m_ampRelease.value() * 1000.0f;
+	float rel = m_ampRelease.value() * 1000.0f;
+	if (m_delayTime.value() > 0.01f && m_delayFeedback.value() > 0.01f)
+	{
+		rel += m_delayTime.value() * 2000.0f;
+	}
+	return rel;
 }
 
 QString OxoSynthInstrument::nodeName() const

@@ -161,6 +161,7 @@ private:
 	NoteVector m_notes;
 	int m_steps;
 	float m_fractionalSteps = 0.0f;
+	float m_userSteps = 0.0f;
 
 	MidiClip * adjacentMidiClipByOffset(int offset) const;
 

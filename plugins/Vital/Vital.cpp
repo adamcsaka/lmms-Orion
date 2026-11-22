@@ -54,21 +54,13 @@ Plugin::Descriptor PLUGIN_EXPORT vital_plugin_descriptor =
 
 VitalVoice::VitalVoice(sample_rate_t sampleRate, NotePlayHandle* nph) :
 	m_sampleRate(sampleRate > 0 ? sampleRate : 44100),
-	m_nph(nph),
-	m_delayBuffer(DELAY_BUFFER_SIZE, SampleFrame(0.0f, 0.0f))
+	m_nph(nph)
 {
 	for (int i = 0; i < MAX_UNISON; ++i)
 	{
 		m_osc1Phase[i] = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
 		m_osc2Phase[i] = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
 		m_osc3Phase[i] = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
-	}
-
-	const int combDelays[REVERB_COMBS] = { 1116, 1188, 1277, 1356 };
-	for (int i = 0; i < REVERB_COMBS; ++i)
-	{
-		int size = static_cast<int>(combDelays[i] * (m_sampleRate / 44100.0f));
-		m_reverbBuffer[i].resize(std::max(10, size), 0.0f);
 	}
 }
 
@@ -497,6 +489,10 @@ void VitalVoice::render(SampleFrame* buffer, f_cnt_t offset, f_cnt_t frames, Vit
 		// Delay FX
 		if (delayTime > 0.01f && delayFb > 0.01f)
 		{
+			if (m_delayBuffer.empty())
+			{
+				m_delayBuffer.assign(DELAY_BUFFER_SIZE, SampleFrame(0.0f, 0.0f));
+			}
 			int delaySamples = std::clamp(static_cast<int>(delayTime * m_sampleRate), 1, DELAY_BUFFER_SIZE - 1);
 			int readPos = (m_delayWritePos - delaySamples + DELAY_BUFFER_SIZE) % DELAY_BUFFER_SIZE;
 			SampleFrame delayed = m_delayBuffer[readPos];
@@ -509,6 +505,15 @@ void VitalVoice::render(SampleFrame* buffer, f_cnt_t offset, f_cnt_t frames, Vit
 		// Reverb FX (Comb diffusers)
 		if (revMix > 0.01f)
 		{
+			if (m_reverbBuffer[0].empty())
+			{
+				const int combDelays[REVERB_COMBS] = { 1116, 1188, 1277, 1356 };
+				for (int i = 0; i < REVERB_COMBS; ++i)
+				{
+					int size = static_cast<int>(combDelays[i] * (m_sampleRate / 44100.0f));
+					m_reverbBuffer[i].assign(std::max(10, size), 0.0f);
+				}
+			}
 			float revSum = 0.0f;
 			for (int c = 0; c < REVERB_COMBS; ++c)
 			{
@@ -666,8 +671,6 @@ void VitalInstrument::playNote(NotePlayHandle* n, SampleFrame* workingBuffer)
 	const f_cnt_t offset = n->noteOffset();
 
 	voice->render(workingBuffer, offset, frames, this);
-
-	applyRelease(workingBuffer, n);
 }
 
 void VitalInstrument::deleteNotePluginData(NotePlayHandle* n)
@@ -681,7 +684,16 @@ void VitalInstrument::deleteNotePluginData(NotePlayHandle* n)
 
 float VitalInstrument::desiredReleaseTimeMs() const
 {
-	return m_ampRelease.value() * 1000.0f;
+	float rel = m_ampRelease.value() * 1000.0f;
+	if (m_delayTime.value() > 0.01f && m_delayFeedback.value() > 0.01f)
+	{
+		rel += m_delayTime.value() * 2000.0f;
+	}
+	if (m_reverbMix.value() > 0.01f)
+	{
+		rel += m_reverbDecay.value() * 1500.0f;
+	}
+	return rel;
 }
 
 QString VitalInstrument::nodeName() const

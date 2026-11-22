@@ -46,6 +46,7 @@
 #include "EffectSelectDialog.h"
 #include "EffectView.h"
 #include "GroupBox.h"
+#include "Song.h"
 #include "TextFloat.h"
 
 
@@ -158,6 +159,11 @@ void EffectRackView::moveUp( EffectView* view )
 		m_effectViews[i] = temp;
 
 		update();
+
+	if (Engine::getSong())
+	{
+		Engine::getSong()->setModified();
+	}
 	}
 }
 
@@ -184,6 +190,11 @@ void EffectRackView::deletePlugin( EffectView* view )
 	fxChain()->removeEffect( e );
 	e->deleteLater();
 	update();
+
+	if (Engine::getSong())
+	{
+		Engine::getSong()->setModified();
+	}
 }
 
 
@@ -286,6 +297,11 @@ void EffectRackView::addEffect()
 	fxChain()->appendEffect( fx );
 	update();
 
+	if (Engine::getSong())
+	{
+		Engine::getSong()->setModified();
+	}
+
 	// Find the effectView, and show the controls
 	for (const auto& effectView : m_effectViews)
 	{
@@ -308,6 +324,11 @@ void EffectRackView::modelChanged()
 	m_effectsGroupBox->setModel( &fxChain()->m_enabledModel );
 	connect( fxChain(), SIGNAL(aboutToClear()), this, SLOT(clearViews()));
 	update();
+
+	if (Engine::getSong())
+	{
+		Engine::getSong()->setModified();
+	}
 }
 
 
@@ -432,9 +453,14 @@ void EffectRackView::loadEffectChain()
 
 	if (!fxElement.isNull())
 	{
-		clearViews();
+		fxChain()->clear();
 		fxChain()->loadSettings(fxElement);
 		update();
+
+	if (Engine::getSong())
+	{
+		Engine::getSong()->setModified();
+	}
 	}
 }
 
@@ -449,7 +475,9 @@ void EffectRackView::contextMenuEvent( QContextMenuEvent* event )
 	contextMenu->addSeparator();
 	contextMenu->addAction( embed::getIconPixmap( "arp_random" ), tr( "&Randomize effect rack..." ), this, SLOT(randomizeEffects()) );
 	contextMenu->addSeparator();
-	contextMenu->addAction( embed::getIconPixmap( "cancel" ), tr( "&Clear all effects" ), this, SLOT(clearViews()) );
+	contextMenu->addAction( embed::getIconPixmap( "cancel" ), tr( "&Clear all effects" ), this, [this]() {
+		if (fxChain()) { fxChain()->clear(); update(); }
+	} );
 	contextMenu->exec( QCursor::pos() );
 	delete contextMenu;
 }
@@ -474,7 +502,7 @@ void EffectRackView::randomizeEffects()
 	};
 	const int numFx = sizeof(fxPlugins) / sizeof(fxPlugins[0]);
 
-	clearViews();
+	fxChain()->clear();
 
 	for (int i = 0; i < count; ++i)
 	{
@@ -510,6 +538,11 @@ void EffectRackView::randomizeEffects()
 	}
 
 	update();
+
+	if (Engine::getSong())
+	{
+		Engine::getSong()->setModified();
+	}
 
 	TextFloat::displayMessage(
 		tr("Effect Rack Randomized"),

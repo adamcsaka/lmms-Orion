@@ -1011,57 +1011,22 @@ SongEditorWindow::SongEditorWindow(Song* song) :
 			it->loadInstrument(chosenSynth);
 			it->setName(QString("%1 (Synth %2)").arg(it->instrumentName()).arg(i + 1));
 
-			const auto models = it->findChildren<AutomatableModel*>();
-			for (auto* m : models)
-			{
-				if (!m) { continue; }
-				if (auto fm = m->dynamicCast<FloatModel>())
-				{
-					float minVal = fm->minValue();
-					float maxVal = fm->maxValue();
-					if (std::isfinite(minVal) && std::isfinite(maxVal) && maxVal > minVal)
-					{
-						float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
-						fm->setValue(minVal + r * (maxVal - minVal));
-					}
-				}
-				else if (auto im = m->dynamicCast<IntModel>())
-				{
-					int minVal = im->minValue();
-					int maxVal = im->maxValue();
-					if (maxVal > minVal && (maxVal - minVal) <= 64)
-					{
-						im->setValue(minVal + (rand() % (maxVal - minVal + 1)));
-					}
-				}
-			}
-
-			it->panningModel()->setValue(static_cast<float>((rand() % 121) - 60));
-			it->volumeModel()->setValue(75.0f + static_cast<float>(rand() % 30));
-
 			if (it->audioBusHandle() && it->audioBusHandle()->effects())
 			{
-				const char* chosenFx = fxPlugins[rand() % numFx];
-				Effect* e = Effect::instantiate(QString::fromUtf8(chosenFx), it->audioBusHandle()->effects(), nullptr);
-				if (e && e->isOkay())
+				int numEffectsToGen = 1 + (rand() % 2); // 1 to 2 effects
+				for (int eIdx = 0; eIdx < numEffectsToGen; ++eIdx)
 				{
-					it->audioBusHandle()->effects()->appendEffect(e);
-					const auto fxModels = e->findChildren<AutomatableModel*>();
-					for (auto* fm_obj : fxModels)
+					const char* chosenFx = fxPlugins[rand() % numFx];
+					Effect* e = Effect::instantiate(QString::fromUtf8(chosenFx), it->audioBusHandle()->effects(), nullptr);
+					if (e && e->isOkay())
 					{
-						if (auto fm = fm_obj->dynamicCast<FloatModel>())
-						{
-							float minVal = fm->minValue();
-							float maxVal = fm->maxValue();
-							if (std::isfinite(minVal) && std::isfinite(maxVal) && maxVal > minVal)
-							{
-								float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
-								fm->setValue(minVal + r * (maxVal - minVal));
-							}
-						}
+						it->audioBusHandle()->effects()->appendEffect(e);
 					}
 				}
 			}
+
+			it->randomizeParameters(false);
+			it->volumeModel()->setValue(75.0f + static_cast<float>(rand() % 30));
 		}
 
 		TextFloat::displayMessage(
@@ -1081,7 +1046,7 @@ SongEditorWindow::SongEditorWindow(Song* song) :
 			{
 				auto it = dynamic_cast<InstrumentTrack*>(t);
 				if (!it) { continue; }
-				it->randomizeParameters();
+				it->randomizeParameters(true);
 			}
 		};
 

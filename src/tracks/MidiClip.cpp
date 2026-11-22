@@ -59,7 +59,9 @@ MidiClip::MidiClip( const MidiClip& other ) :
 	Clip(other),
 	m_instrumentTrack( other.m_instrumentTrack ),
 	m_clipType( other.m_clipType ),
-	m_steps( other.m_steps )
+	m_steps( other.m_steps ),
+	m_fractionalSteps( other.m_fractionalSteps ),
+	m_userSteps( other.m_userSteps )
 {
 	for (const auto& note : other.m_notes)
 	{
@@ -134,30 +136,32 @@ void MidiClip::updateLength()
 	// If the clip hasn't already been manually resized, automatically resize it.
 	if (getAutoResize())
 	{
+		const float ticksPerStep = static_cast<float>(TimePos::ticksPerBar()) / TimePos::stepsPerBar();
+
 		// Find maximum note tick across all notes in clip
 		tick_t max_note_tick = 0;
 		for (const auto& note : m_notes)
 		{
-			if (note->type() == Note::Type::Step)
+			tick_t note_end = 0;
+			if (note->type() == Note::Type::Step || note->length() <= 0)
 			{
-				max_note_tick = std::max<tick_t>(max_note_tick, note->pos() + 1);
+				note_end = note->pos() + static_cast<tick_t>(ticksPerStep);
 			}
-			else if (note->length() > 0)
+			else
 			{
-				max_note_tick = std::max<tick_t>(max_note_tick, note->endPos());
+				note_end = note->endPos();
 			}
+			max_note_tick = std::max<tick_t>(max_note_tick, note_end);
 		}
 
-		const float ticksPerStep = static_cast<float>(TimePos::ticksPerBar()) / TimePos::stepsPerBar();
-		if (max_note_tick > 0 && ticksPerStep > 0.0f)
-		{
-			float neededSteps = static_cast<float>(max_note_tick) / ticksPerStep;
-			if (neededSteps > fractionalSteps())
-			{
-				m_fractionalSteps = neededSteps;
-				m_steps = std::max(1, static_cast<int>(std::ceil(neededSteps)));
-			}
-		}
+		float neededSteps = (max_note_tick > 0 && ticksPerStep > 0.0f)
+			? (static_cast<float>(max_note_tick) / ticksPerStep)
+			: 0.0f;
+
+		float baseSteps = m_userSteps > 0.0f ? m_userSteps : static_cast<float>(TimePos::stepsPerBar());
+		float effectiveSteps = std::max(baseSteps, neededSteps);
+		m_fractionalSteps = effectiveSteps;
+		m_steps = std::max(1, static_cast<int>(std::ceil(effectiveSteps)));
 
 		if (m_instrumentTrack->trackContainer()->type() == TrackContainer::Type::Pattern)
 		{
@@ -174,6 +178,11 @@ void MidiClip::updateLength()
 
 		changeLength( TimePos( max_length ).nextFullBar() *
 							TimePos::ticksPerBar() );
+		if (ticksPerStep > 0.0f)
+		{
+			m_fractionalSteps = static_cast<float>(length()) / ticksPerStep;
+			m_steps = std::max(1, static_cast<int>(std::ceil(m_fractionalSteps)));
+		}
 		setStartTimeOffset(TimePos(0));
 		updatePatternTrack();
 	}
@@ -185,23 +194,26 @@ void MidiClip::updateLength()
 TimePos MidiClip::beatClipLength() const
 {
 	tick_t max_length = 0;
+	const tick_t ticksPerStep = TimePos::ticksPerBar() / TimePos::stepsPerBar();
 
 	for (const auto& note : m_notes)
 	{
-		if (note->type() == Note::Type::Step)
+		tick_t note_end = 0;
+		if (note->type() == Note::Type::Step || note->length() <= 0)
 		{
-			max_length = std::max<tick_t>(max_length, note->pos() + 1);
+			note_end = note->pos() + ticksPerStep;
 		}
-		else if (note->length() > 0)
+		else
 		{
-			max_length = std::max<tick_t>(max_length, note->endPos());
+			note_end = note->endPos();
 		}
+		max_length = std::max<tick_t>(max_length, note_end);
 	}
 
 	tick_t stepTicks = 0;
 	if (m_fractionalSteps > 0.0f)
 	{
-		stepTicks = static_cast<tick_t>(std::round(m_fractionalSteps * TimePos::ticksPerBar() / TimePos::stepsPerBar()));
+		stepTicks = static_cast<tick_t>(std::round(m_fractionalSteps * static_cast<float>(TimePos::ticksPerBar()) / TimePos::stepsPerBar()));
 	}
 	else if (m_steps > 0)
 	{
@@ -493,6 +505,10 @@ void MidiClip::exportToXML(QDomDocument& doc, QDomElement& midiClipElement, bool
 	{
 		midiClipElement.setAttribute("fractionalSteps", QString::number(m_fractionalSteps, 'f', 2));
 	}
+	if (m_userSteps > 0.0f)
+	{
+		midiClipElement.setAttribute("userSteps", QString::number(m_userSteps, 'f', 2));
+	}
 	midiClipElement.setAttribute("len", length());
 
 	// now save settings of all notes
@@ -563,6 +579,15 @@ void MidiClip::loadSettings( const QDomElement & _this )
 		m_fractionalSteps = static_cast<float>(m_steps);
 	}
 
+	if (_this.hasAttribute("userSteps"))
+	{
+		m_userSteps = _this.attribute("userSteps").toFloat();
+	}
+	else if (_this.hasAttribute("fractionalSteps") && _this.attribute("fractionalSteps").toFloat() != static_cast<float>(TimePos::stepsPerBar()))
+	{
+		m_userSteps = _this.attribute("fractionalSteps").toFloat();
+	}
+
 	checkType();
 
 	int len = _this.attribute("len").toInt();
@@ -624,6 +649,7 @@ void MidiClip::clear()
 void MidiClip::addSteps()
 {
 	m_steps += TimePos::stepsPerBar();
+	m_userSteps = static_cast<float>(m_steps);
 	updateLength();
 	emit dataChanged();
 }
@@ -632,6 +658,7 @@ void MidiClip::cloneSteps()
 {
 	int oldLength = m_steps;
 	m_steps *= 2; // cloning doubles the track
+	m_userSteps = static_cast<float>(m_steps);
 	for(int i = 0; i < oldLength; ++i )
 	{
 		Note *toCopy = noteAtStep( i );
@@ -662,6 +689,7 @@ void MidiClip::removeSteps()
 			setStep( i, false );
 		}
 		m_steps -= n;
+		m_userSteps = static_cast<float>(m_steps);
 		updateLength();
 		emit dataChanged();
 	}
@@ -670,6 +698,7 @@ void MidiClip::removeSteps()
 void MidiClip::setSteps( int newSteps )
 {
 	if( newSteps < 1 || newSteps == m_steps ) { return; }
+	m_userSteps = static_cast<float>(newSteps);
 	m_fractionalSteps = static_cast<float>(newSteps);
 	if( newSteps < m_steps )
 	{
@@ -686,6 +715,7 @@ void MidiClip::setSteps( int newSteps )
 void MidiClip::setFractionalSteps( float steps )
 {
 	if( steps <= 0.0f ) { return; }
+	m_userSteps = steps;
 	m_fractionalSteps = steps;
 	int intSteps = std::max(1, static_cast<int>(std::ceil(steps)));
 	if( intSteps < m_steps )
@@ -724,6 +754,10 @@ void MidiClip::duplicateContent()
 		m_notes.push_back(n);
 	}
 
+	if (m_userSteps > 0.0f)
+	{
+		m_userSteps *= 2.0f;
+	}
 	if (m_fractionalSteps > 0.0f)
 	{
 		m_fractionalSteps *= 2.0f;
@@ -754,6 +788,10 @@ void MidiClip::scaleContent(float percentage)
 		}
 	}
 
+	if (m_userSteps > 0.0f)
+	{
+		m_userSteps = std::max(0.25f, m_userSteps * ratio);
+	}
 	if (m_fractionalSteps > 0.0f)
 	{
 		m_fractionalSteps = std::max(0.25f, m_fractionalSteps * ratio);

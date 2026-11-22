@@ -1165,9 +1165,12 @@ void InstrumentTrack::autoAssignMidiDevice(bool assign)
 }
 
 
-void InstrumentTrack::randomizeParameters()
+void InstrumentTrack::randomizeParameters(bool randomizePitch)
 {
-	m_pitchModel.setValue(static_cast<float>((rand() % 25 - 12) * 100));
+	if (randomizePitch)
+	{
+		m_pitchModel.setValue(static_cast<float>((rand() % 25 - 12) * 100));
+	}
 	m_panningModel.setValue(static_cast<float>((rand() % 161) - 80));
 
 	const auto models = findChildren<AutomatableModel*>();
