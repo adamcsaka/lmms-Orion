@@ -53,10 +53,18 @@ Ez a dokumentum az **LMMS Orion** teljes fejlesztési, felépítési és konfigu
 
 ## 3. A felhasználó alapvető elvárásai és szabályai
 
-1. **Elkülönített verziók:** Minden verzió külön mappába kerül a Letöltések mappában (`LMMS-Orion-v3`, `LMMS-Orion-v4`, `LMMS-Orion-v5` stb.), a korábbi verziók nem íródnak felül.
-2. **Helyi tesztelés prioritása:** A gyors teszteléshez helyben történik az inkrementális fordítás a 12 logikai szálon.
-3. **Azonnali Git mentés:** Amikor a módosítások elkészülnek, azonnal fel kell tölteni a GitHubra az új ággal/verzióval (`vX`).
-4. **GitHub Actions sorrend:** A felhős buildelésnél a Windows zip csomag az abszolút elsőbbség, utána jöhet a Linux AppImage. A felesleges lassú célokat ki kell hagyni.
+1. **Elkülönített verziók:** Minden verzió külön, tiszta mappába kerül a Letöltések mappában (`LMMS-Orion-v3`, `LMMS-Orion-v4`, `LMMS-Orion-v5` stb.), a korábbi verziók nem íródnak felül és nem vesznek el.
+2. **Helyi tesztelés prioritása (Miért helyben fordítunk?):**
+   - A felhasználó gépén egy gyors, 12 logikai szálas processzor fut, a buildkörnyezet (MSVC 2022, Ninja, Qt 6.8, vcpkg) teljesen be van állítva helyben.
+   - A Ninja inkrementális fordítással csak a ténylegesen módosított C++ fájlokat fordítja újra, ami **másodpercek alatt elkészül**.
+   - Nem szabad a teszteléshez a lassú GitHub runnerre várni (ahol 2 magon percekig/félóráig tartana egy teljes build), a fejlesztés és kipróbálás mindig helyben történik!
+3. **Azonnali Git mentés:**
+   - Amint elkészültek a módosítások és helyben lefordult/tesztelve lett a szoftver, a forráskódot azonnal el kell menteni (commit) és fel kell tölteni a GitHubra az aktuális verzió ágára (`v5`, `v6` stb.).
+   - A GitHub a forráskód biztonságos felhős tárhelye és verziókövetője.
+4. **GitHub Actions viselkedés és sorrend:**
+   - A GitHub Actions felhős fordítás nem kötelező minden apró változtatás teszteléséhez.
+   - Amikor felhős build fut, a **Windows zip/portable csomag elkészítése az abszolút elsődleges prioritás**, ezt kövesse a Linux AppImage. A felesleges vagy hibára hajlamos egyéb célokat (pl. régi macOS, 32-bites felesleges ágak) ki kell hagyni.
+   - A felhős buildelés a felhasználó gépét nem lassítja, a háttérben fut. Ha kész, a letölthető csomagot le lehet tölteni és kicsomagolni a Letöltések mappába.
 
 ---
 
