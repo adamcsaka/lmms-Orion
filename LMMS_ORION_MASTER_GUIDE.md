@@ -99,3 +99,8 @@ Ez a dokumentum az **LMMS Orion** teljes fejlesztési, felépítési és konfigu
   - **Hardveres hangszám-korlát és hanglopás (Max Polyphony & Voice Stealing):** Új `POLY` LCD spinbox az Instrument Track ablakában és intelligens voice stealing a `NotePlayHandle`-ben a CPU túlterhelésének megelőzésére.
   - **Fordítási processzormag-foglalási szabály (Build Concurrency Guard):** Helyi fordításkor (`build-local.ps1`) dinamikusan 3-4 logikai processzormagot szabadon hagy a rendszer a gép reszponzivitásának fenntartása érdekében.
   - **LMMS-Orion-v6 portable csomagolás:** Új `deploy-v6.ps1` telepítő script a Letöltések mappába való tiszta kicsomagoláshoz.
+* **v7 (Aktív fejlesztés):**
+  - **GUI moduláció akadozás felszámolása (Smooth 60 FPS GUI):** A vezérlők és modulációk (LFO, automatika, kivezérlésmérők) által generált Qt eseményhurok-túltelítődés megszüntetése és intelligens képfrissítés-korlátozás (throttling/dirty-rectangles).
+  - **AVX2 SIMD keverőmotor és CPU védelem:** Valós idejű SIMD audio mixelés AVX2 vektorizációval, dinamikus CPUID detektálással és SSE tartalékkal.
+  - **Biztonságos, izolált telepítés (`deploy-v7.ps1`):** Telepítés dedikált `LMMS-Orion-v7` mappába a Windows fájlzárolások (`EBUSY`) elkerülésére.
+  - **Rendszerezett változáskövetés (`CHANGELOG.md`):** Minden módosítás dátummal, commit hash-sel és leírással való dokumentálása.

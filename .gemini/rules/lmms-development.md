@@ -48,3 +48,9 @@ globs: **/*
 ## 10. Crash Prevention & Identifier Validation
 - Explicitly guard all dynamic pointers (`Track*`, `Instrument*`, `Effect*`) with `nullptr` checks before dereferencing.
 - Never guess plugin library names or filenames from memory; check disk binaries and symbols (`dumpbin /exports`) before referencing.
+
+## 11. Deployment Isolation (Anti-Locking Rule)
+- When packaging and deploying, never overwrite a destination folder currently in use or open. Always deploy to a separate, incremented versioned directory (e.g. `LMMS-Orion-v7`) or isolated staging location so builds are never blocked by OS file locks (`EBUSY`).
+
+## 12. Systematic Changelog & Temporal Ledger
+- Always maintain `CHANGELOG.md` in the repository root. Log every change, feature, bug fix, safety rule, and commit hash with technical descriptions and dates.

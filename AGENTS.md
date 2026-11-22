@@ -7,7 +7,9 @@
 - **Master Guide:** Follow `C:\lmms\lmms-repo\LMMS_ORION_MASTER_GUIDE.md` for toolchain paths, local build commands, and deploy scripts.
 - **Git Push Invariant:** Always pass `-c credential.helper=` on git commands (`& 'C:\lmms\git\cmd\git.exe' -C 'C:\lmms\lmms-repo' -c credential.helper= push origin <branch>`) to prevent Windows credential helper popup hangs.
 - **Local Compilation:** Always execute `build-local.ps1` or run ninja reserving 3–4 CPU cores free (`[Math]::Max(1, $env:NUMBER_OF_PROCESSORS - 4)`). Never pin 100% of CPU cores.
-- **Portable Deployment:** Run `deploy-v6.ps1` to update `C:\Users\ahsoka\Downloads\LMMS-Orion-v6`.
+- **Portable Deployment:** Run `deploy-v7.ps1` to update `C:\Users\ahsoka\Downloads\LMMS-Orion-v7`.
+- **Deployment Isolation (Anti-Locking Rule):** Never overwrite an actively opened deployment directory. If the destination is locked by a running process, deploy into an incremented versioned directory or timestamped folder.
+- **Changelog Tracking:** Always update `CHANGELOG.md` with every commit or milestone, detailing what was changed and why.
 
 ## 2. Multi-Session & Git Awareness
 - Always inspect `git log -n 5` and `git status` before starting analysis or edits. Another concurrent session may have already resolved or started work on the issue.
