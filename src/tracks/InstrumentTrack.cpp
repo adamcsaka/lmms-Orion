@@ -1181,9 +1181,22 @@ void InstrumentTrack::randomizeParameters(bool randomizePitch)
 
 	for (auto* m : models)
 	{
-		if (!m || m == &m_pitchModel || m == &m_volumeModel || m == &m_panningModel) { continue; }
+		// Invariant: Never mute/solo tracks, never change track group, and never scramble mixer channel routing
+		if (!m || m == &m_pitchModel || m == &m_volumeModel || m == &m_panningModel ||
+			m == &m_mutedModel || m == &m_soloModel ||
+			m == &m_mixerChannelModel || m == &m_midiGroupModel ||
+			m == &m_baseNoteModel || m == &m_firstKeyModel || m == &m_lastKeyModel)
+		{
+			continue;
+		}
 
 		const QString name = (m->displayName().isEmpty() ? m->objectName() : m->displayName()).toLower();
+		if (name.contains("mute") || name.contains("solo") ||
+			name.contains("mixer") || name.contains("channel") ||
+			name.contains("group") || name.contains("routing") || name.contains("route"))
+		{
+			continue;
+		}
 		if (name.contains("master volume") || name.contains("master vol"))
 		{
 			if (auto fm = m->dynamicCast<FloatModel>())

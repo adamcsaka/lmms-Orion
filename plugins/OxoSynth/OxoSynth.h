@@ -97,6 +97,8 @@ public:
 
 	gui::PluginView* instantiateView(QWidget* parent) override;
 
+	static float calculateWaveSample(int waveType, float phase, float pulseWidth);
+
 	// Oscillator 1
 	ComboBoxModel m_osc1Wave;
 	FloatModel m_osc1PulseWidth;
@@ -166,6 +168,56 @@ public:
 namespace gui
 {
 
+class OxoWaveformVisualizer : public QWidget
+{
+	Q_OBJECT
+public:
+	explicit OxoWaveformVisualizer(QWidget* parent = nullptr);
+	void setWaveform(int waveType, float pw);
+
+protected:
+	void paintEvent(QPaintEvent* event) override;
+
+private:
+	int m_waveType = 1;
+	float m_pulseWidth = 0.5f;
+};
+
+class OxoFilterVisualizer : public QWidget
+{
+	Q_OBJECT
+public:
+	explicit OxoFilterVisualizer(QWidget* parent = nullptr);
+	void setFilter(int type, float cutoff, float resonance);
+
+protected:
+	void paintEvent(QPaintEvent* event) override;
+
+private:
+	int m_type = 0;
+	float m_cutoff = 1000.0f;
+	float m_resonance = 1.0f;
+};
+
+class OxoEnvelopeVisualizer : public QWidget
+{
+	Q_OBJECT
+public:
+	explicit OxoEnvelopeVisualizer(const QString& title, const QColor& color, QWidget* parent = nullptr);
+	void setEnvelope(float a, float d, float s, float r);
+
+protected:
+	void paintEvent(QPaintEvent* event) override;
+
+private:
+	QString m_title;
+	QColor m_color;
+	float m_attack = 0.01f;
+	float m_decay = 0.3f;
+	float m_sustain = 0.7f;
+	float m_release = 0.2f;
+};
+
 class OxoSynthView : public InstrumentView
 {
 	Q_OBJECT
@@ -175,8 +227,23 @@ public:
 
 	void modelChanged() override;
 
+	bool isResizable() const override { return true; }
+	QSize sizeHint() const override { return QSize(960, 620); }
+	QSize minimumSizeHint() const override { return QSize(880, 540); }
+
+public Q_SLOTS:
+	void updateWaveformVisualizer();
+	void updateFilterVisualizer();
+	void updateAmpEnvelopeVisualizer();
+	void updateFilterEnvelopeVisualizer();
+
 private:
 	void setupUI();
+
+	OxoWaveformVisualizer* m_waveVisualizer = nullptr;
+	OxoFilterVisualizer* m_filterVisualizer = nullptr;
+	OxoEnvelopeVisualizer* m_ampEnvVisualizer = nullptr;
+	OxoEnvelopeVisualizer* m_filterEnvVisualizer = nullptr;
 
 	// Osc 1 controls
 	ComboBox* m_osc1WaveBox = nullptr;

@@ -504,8 +504,8 @@ void InstrumentTrackWindow::updateInstrumentView()
 		const auto maxSize = m_instrumentView->isResizable()
 			? QSize{QWIDGETSIZE_MAX, QWIDGETSIZE_MAX}
 			: QSize{
-				std::max(INSTRUMENT_WIDTH, m_instrumentView->width()),
-				std::max(INSTRUMENT_HEIGHT, m_instrumentView->maximumHeight()),
+				std::max(INSTRUMENT_WIDTH, m_instrumentView->sizeHint().isValid() ? m_instrumentView->sizeHint().width() : m_instrumentView->width()),
+				std::max(INSTRUMENT_HEIGHT, m_instrumentView->sizeHint().isValid() ? m_instrumentView->sizeHint().height() : m_instrumentView->maximumHeight()),
 			};
 		m_tabWidget->setMaximumSize(maxSize);
 		// Individual tabs must also have their maximum widths set,

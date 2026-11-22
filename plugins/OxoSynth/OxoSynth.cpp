@@ -16,6 +16,9 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLinearGradient>
+#include <QPainter>
+#include <QPainterPath>
 #include <QTabWidget>
 #include <QVBoxLayout>
 
@@ -64,7 +67,7 @@ OxoVoice::OxoVoice(sample_rate_t sampleRate, NotePlayHandle* nph) :
 	m_lfo2Phase = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
 }
 
-float OxoVoice::generateWave(int waveType, float phase, float pulseWidth)
+float OxoSynthInstrument::calculateWaveSample(int waveType, float phase, float pulseWidth)
 {
 	// Keep phase in [0.0, 1.0)
 	phase = phase - std::floor(phase);
@@ -89,6 +92,11 @@ float OxoVoice::generateWave(int waveType, float phase, float pulseWidth)
 		default:
 			return std::sin(twoPi * phase);
 	}
+}
+
+float OxoVoice::generateWave(int waveType, float phase, float pulseWidth)
+{
+	return OxoSynthInstrument::calculateWaveSample(waveType, phase, pulseWidth);
 }
 
 float OxoVoice::processFilter(float input, float cutoffHz, float resonance, float saturation, int type, float& ic1, float& ic2)
@@ -644,6 +652,212 @@ gui::PluginView* OxoSynthInstrument::instantiateView(QWidget* parent)
 namespace gui
 {
 
+OxoWaveformVisualizer::OxoWaveformVisualizer(QWidget* parent) :
+	QWidget(parent)
+{
+	setMinimumHeight(65);
+	setMaximumHeight(85);
+	setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+}
+
+void OxoWaveformVisualizer::setWaveform(int waveType, float pw)
+{
+	m_waveType = waveType;
+	m_pulseWidth = pw;
+	update();
+}
+
+void OxoWaveformVisualizer::paintEvent(QPaintEvent*)
+{
+	QPainter p(this);
+	p.setRenderHint(QPainter::Antialiasing, true);
+	const QRect r = rect();
+
+	// Retro CRT phosphor display
+	p.fillRect(r, QColor(14, 22, 16));
+
+	p.setPen(QPen(QColor(22, 42, 26), 1, Qt::DotLine));
+	p.drawLine(r.left(), r.center().y(), r.right(), r.center().y());
+	for (int x = r.left() + 40; x < r.right(); x += 50)
+	{
+		p.drawLine(x, r.top(), x, r.bottom());
+	}
+
+	const int points = std::max(64, r.width());
+	QPainterPath path;
+	float midY = r.height() * 0.5f;
+	float ampY = r.height() * 0.38f;
+
+	for (int i = 0; i <= points; ++i)
+	{
+		float phase = static_cast<float>(i) / points;
+		float s = OxoSynthInstrument::calculateWaveSample(m_waveType, phase, m_pulseWidth);
+		float px = r.left() + (static_cast<float>(i) / points) * r.width();
+		float py = midY - s * ampY;
+		if (i == 0) { path.moveTo(px, py); }
+		else { path.lineTo(px, py); }
+	}
+
+	p.setPen(QPen(QColor(0, 255, 102), 2.0));
+	p.drawPath(path);
+
+	p.setPen(QColor(160, 255, 180));
+	QFont f = p.font();
+	f.setPixelSize(9);
+	f.setBold(true);
+	p.setFont(f);
+	p.drawText(r.adjusted(8, 4, -8, -4), Qt::AlignTop | Qt::AlignLeft, tr("ANALOG OSCILLOSCOPE SCOPE"));
+
+	p.setPen(QPen(QColor(35, 65, 40), 1));
+	p.setBrush(Qt::NoBrush);
+	p.drawRect(r.adjusted(0, 0, -1, -1));
+}
+
+OxoFilterVisualizer::OxoFilterVisualizer(QWidget* parent) :
+	QWidget(parent)
+{
+	setMinimumHeight(65);
+	setMaximumHeight(85);
+	setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+}
+
+void OxoFilterVisualizer::setFilter(int type, float cutoff, float resonance)
+{
+	m_type = type;
+	m_cutoff = cutoff;
+	m_resonance = resonance;
+	update();
+}
+
+void OxoFilterVisualizer::paintEvent(QPaintEvent*)
+{
+	QPainter p(this);
+	p.setRenderHint(QPainter::Antialiasing, true);
+	const QRect r = rect();
+
+	p.fillRect(r, QColor(24, 18, 18));
+	p.setPen(QPen(QColor(48, 28, 28), 1, Qt::DotLine));
+	p.drawLine(r.left(), r.center().y(), r.right(), r.center().y());
+
+	const int points = std::max(64, r.width());
+	QPainterPath path;
+	float cutoffNorm = std::log10(std::clamp(m_cutoff, 20.0f, 20000.0f) / 20.0f) / 3.0f;
+	float peakPos = r.left() + cutoffNorm * r.width();
+
+	for (int i = 0; i <= points; ++i)
+	{
+		float xNorm = static_cast<float>(i) / points;
+		float px = r.left() + xNorm * r.width();
+		float diff = xNorm - cutoffNorm;
+		float resp = 0.0f;
+
+		if (m_type == 0 || m_type == 1) // LP
+		{
+			float slope = (m_type == 1) ? 4.0f : 2.0f;
+			if (diff <= 0.0f) { resp = 1.0f + (m_resonance - 1.0f) * 0.15f * std::exp(-diff * diff * 30.0f); }
+			else { resp = std::exp(-diff * slope * 8.0f); }
+		}
+		else if (m_type == 2) // HP
+		{
+			if (diff >= 0.0f) { resp = 1.0f + (m_resonance - 1.0f) * 0.15f * std::exp(-diff * diff * 30.0f); }
+			else { resp = std::exp(diff * 3.0f * 8.0f); }
+		}
+		else // BP
+		{
+			resp = std::exp(-diff * diff * 25.0f * (1.0f + m_resonance * 0.5f));
+		}
+
+		resp = std::clamp(resp, 0.0f, 1.4f);
+		float py = r.bottom() - 6 - resp * (r.height() - 16) * 0.7f;
+		if (i == 0) { path.moveTo(px, py); }
+		else { path.lineTo(px, py); }
+	}
+
+	p.setPen(QPen(QColor(255, 75, 75), 2.0));
+	p.drawPath(path);
+
+	// Cutoff line
+	p.setPen(QPen(QColor(255, 200, 200, 100), 1, Qt::DashLine));
+	p.drawLine(QPointF(peakPos, r.top() + 3), QPointF(peakPos, r.bottom() - 3));
+
+	p.setPen(QColor(240, 180, 180));
+	QFont f = p.font();
+	f.setPixelSize(9);
+	f.setBold(true);
+	p.setFont(f);
+	p.drawText(r.adjusted(8, 4, -8, -4), Qt::AlignTop | Qt::AlignLeft,
+		QString("FILTER CURVE (CUTOFF: %1 Hz | RES: %2)").arg(static_cast<int>(m_cutoff)).arg(QString::number(m_resonance, 'f', 1)));
+
+	p.setPen(QPen(QColor(68, 35, 35), 1));
+	p.setBrush(Qt::NoBrush);
+	p.drawRect(r.adjusted(0, 0, -1, -1));
+}
+
+OxoEnvelopeVisualizer::OxoEnvelopeVisualizer(const QString& title, const QColor& color, QWidget* parent) :
+	QWidget(parent),
+	m_title(title),
+	m_color(color)
+{
+	setMinimumHeight(55);
+	setMaximumHeight(75);
+	setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+}
+
+void OxoEnvelopeVisualizer::setEnvelope(float a, float d, float s, float r)
+{
+	m_attack = std::max(0.001f, a);
+	m_decay = std::max(0.001f, d);
+	m_sustain = std::clamp(s, 0.0f, 1.0f);
+	m_release = std::max(0.001f, r);
+	update();
+}
+
+void OxoEnvelopeVisualizer::paintEvent(QPaintEvent*)
+{
+	QPainter p(this);
+	p.setRenderHint(QPainter::Antialiasing, true);
+	const QRect r = rect();
+
+	p.fillRect(r, QColor(20, 20, 20));
+
+	float totalTime = m_attack + m_decay + 0.3f + m_release;
+	float padX = 10.0f;
+	float usableW = r.width() - padX * 2.0f;
+	float topY = r.top() + 16.0f;
+	float botY = r.bottom() - 6.0f;
+	float usableH = botY - topY;
+
+	float x0 = padX;
+	float x1 = x0 + (m_attack / totalTime) * usableW;
+	float x2 = x1 + (m_decay / totalTime) * usableW;
+	float x3 = x2 + (0.3f / totalTime) * usableW;
+	float x4 = x3 + (m_release / totalTime) * usableW;
+
+	float yPeak = topY;
+	float ySus = botY - m_sustain * usableH;
+
+	QPainterPath path;
+	path.moveTo(x0, botY);
+	path.lineTo(x1, yPeak);
+	path.lineTo(x2, ySus);
+	path.lineTo(x3, ySus);
+	path.lineTo(x4, botY);
+
+	p.setPen(QPen(m_color, 1.8));
+	p.drawPath(path);
+
+	p.setPen(QColor(220, 220, 220));
+	QFont f = p.font();
+	f.setPixelSize(9);
+	f.setBold(true);
+	p.setFont(f);
+	p.drawText(r.adjusted(8, 3, -8, -3), Qt::AlignTop | Qt::AlignLeft, m_title);
+
+	p.setPen(QPen(QColor(50, 50, 50), 1));
+	p.setBrush(Qt::NoBrush);
+	p.drawRect(r.adjusted(0, 0, -1, -1));
+}
+
 OxoSynthView::OxoSynthView(Instrument* instrument, QWidget* parent) :
 	InstrumentView(instrument, parent)
 {
@@ -652,25 +866,91 @@ OxoSynthView::OxoSynthView(Instrument* instrument, QWidget* parent) :
 
 void OxoSynthView::setupUI()
 {
+	setStyleSheet(
+		"OxoSynthView { background-color: #1e1e1e; }"
+		"QGroupBox {"
+		"    font-weight: bold;"
+		"    font-size: 11px;"
+		"    color: #ff5555;"
+		"    border: 1px solid #4a2020;"
+		"    border-radius: 4px;"
+		"    margin-top: 10px;"
+		"    padding-top: 12px;"
+		"    background: #242424;"
+		"}"
+		"QGroupBox::title {"
+		"    subcontrol-origin: margin;"
+		"    subcontrol-position: top left;"
+		"    left: 8px;"
+		"    padding: 1px 8px;"
+		"    background: #8B1A1A;"
+		"    color: #ffffff;"
+		"    border-radius: 3px;"
+		"    font-weight: 900;"
+		"    letter-spacing: 1px;"
+		"}"
+		"QLabel { color: #cccccc; font-size: 10px; font-weight: bold; }"
+	);
+
 	auto mainLayout = new QVBoxLayout(this);
-	mainLayout->setContentsMargins(4, 4, 4, 4);
+	mainLayout->setContentsMargins(6, 6, 6, 6);
+	mainLayout->setSpacing(4);
 
-	auto tabWidget = new QTabWidget(this);
+	// Header Bar
+	auto headerWidget = new QWidget(this);
+	auto headerLayout = new QHBoxLayout(headerWidget);
+	headerLayout->setContentsMargins(4, 2, 4, 2);
 
-	// Tab 1: Oscillators & Mixer
-	auto oscTab = new QWidget(tabWidget);
-	auto oscLayout = new QVBoxLayout(oscTab);
+	auto titleLabel = new QLabel(tr("[ OXOSYNTH ]"), headerWidget);
+	titleLabel->setStyleSheet("font-size: 16px; font-weight: 900; color: #ff3333; letter-spacing: 1px;");
+	auto subtitleLabel = new QLabel(tr("VIRTUAL ANALOG SYNTHESIZER (SYNTH1 ARCHITECTURE)"), headerWidget);
+	subtitleLabel->setStyleSheet("font-size: 10px; font-weight: bold; color: #aaaaaa;");
 
-	// Osc 1 Group
-	auto osc1Group = new QGroupBox(tr("Oscillator 1 (FM & Sub)"), oscTab);
-	auto osc1Grid = new QGridLayout(osc1Group);
+	headerLayout->addWidget(titleLabel);
+	headerLayout->addWidget(subtitleLabel);
+	headerLayout->addStretch();
+
+	m_portamentoKnob = new Knob(KnobType::Styled, tr("Portamento"), headerWidget);
+	m_masterPanKnob = new Knob(KnobType::Styled, tr("Master Pan"), headerWidget);
+	m_masterVolKnob = new Knob(KnobType::Styled, tr("Master Vol"), headerWidget);
+	headerLayout->addWidget(m_portamentoKnob);
+	headerLayout->addWidget(m_masterPanKnob);
+	headerLayout->addWidget(m_masterVolKnob);
+	mainLayout->addWidget(headerWidget);
+
+	// 2-Column Classic Synth1 Console Layout (All controls visible at once!)
+	auto columnsWidget = new QWidget(this);
+	auto columnsLayout = new QHBoxLayout(columnsWidget);
+	columnsLayout->setContentsMargins(0, 0, 0, 0);
+	columnsLayout->setSpacing(6);
+
+	// ==========================================
+	// Left Column: Signal Generators & Modulation
+	// ==========================================
+	auto leftCol = new QWidget(columnsWidget);
+	auto leftLayout = new QVBoxLayout(leftCol);
+	leftLayout->setContentsMargins(0, 0, 0, 0);
+	leftLayout->setSpacing(4);
+
+	// OSC 1 Group
+	auto osc1Group = new QGroupBox(tr("OSCILLATOR 1 (FM & SUB)"), leftCol);
+	auto osc1MainLayout = new QVBoxLayout(osc1Group);
+	osc1MainLayout->setContentsMargins(6, 8, 6, 6);
+	osc1MainLayout->setSpacing(4);
+
+	m_waveVisualizer = new OxoWaveformVisualizer(osc1Group);
+	m_waveVisualizer->setFixedHeight(50);
+	osc1MainLayout->addWidget(m_waveVisualizer);
+
+	auto osc1Grid = new QGridLayout();
+	osc1Grid->setContentsMargins(0, 0, 0, 0);
 
 	m_osc1WaveBox = new ComboBox(osc1Group);
 	m_osc1PWKnob = new Knob(KnobType::Styled, tr("Pulse Width"), osc1Group);
 	m_osc1PWMKnob = new Knob(KnobType::Styled, tr("PWM Depth"), osc1Group);
+	m_fmAmountKnob = new Knob(KnobType::Styled, tr("FM (from Osc2)"), osc1Group);
 	m_subTypeBox = new ComboBox(osc1Group);
 	m_subLevelKnob = new Knob(KnobType::Styled, tr("Sub Level"), osc1Group);
-	m_fmAmountKnob = new Knob(KnobType::Styled, tr("FM Amount"), osc1Group);
 	m_osc1LevelKnob = new Knob(KnobType::Styled, tr("Osc 1 Level"), osc1Group);
 	m_osc1PanKnob = new Knob(KnobType::Styled, tr("Osc 1 Pan"), osc1Group);
 
@@ -685,11 +965,13 @@ void OxoSynthView::setupUI()
 	osc1Grid->addWidget(m_subLevelKnob, 1, 2);
 	osc1Grid->addWidget(m_osc1LevelKnob, 1, 3);
 	osc1Grid->addWidget(m_osc1PanKnob, 1, 4);
-	oscLayout->addWidget(osc1Group);
+	osc1MainLayout->addLayout(osc1Grid);
+	leftLayout->addWidget(osc1Group);
 
-	// Osc 2 Group
-	auto osc2Group = new QGroupBox(tr("Oscillator 2 (Sync & Ring)"), oscTab);
+	// OSC 2 Group
+	auto osc2Group = new QGroupBox(tr("OSCILLATOR 2 (SYNC & RING)"), leftCol);
 	auto osc2Grid = new QGridLayout(osc2Group);
+	osc2Grid->setContentsMargins(6, 8, 6, 6);
 
 	m_osc2WaveBox = new ComboBox(osc2Group);
 	m_osc2OctaveKnob = new Knob(KnobType::Styled, tr("Octave"), osc2Group);
@@ -710,76 +992,22 @@ void OxoSynthView::setupUI()
 	osc2Grid->addWidget(m_syncLed, 1, 2);
 	osc2Grid->addWidget(m_osc2LevelKnob, 1, 3);
 	osc2Grid->addWidget(m_osc2PanKnob, 1, 4);
-	oscLayout->addWidget(osc2Group);
+	leftLayout->addWidget(osc2Group);
 
-	// Noise Group
-	auto noiseGroup = new QGroupBox(tr("Noise Generator"), oscTab);
+	// Noise Generator
+	auto noiseGroup = new QGroupBox(tr("NOISE GENERATOR"), leftCol);
 	auto noiseGrid = new QGridLayout(noiseGroup);
+	noiseGrid->setContentsMargins(6, 8, 6, 6);
 	m_noiseLevelKnob = new Knob(KnobType::Styled, tr("Noise Level"), noiseGroup);
 	m_noiseColorKnob = new Knob(KnobType::Styled, tr("Color (White/Pink)"), noiseGroup);
 	noiseGrid->addWidget(m_noiseLevelKnob, 0, 0);
 	noiseGrid->addWidget(m_noiseColorKnob, 0, 1);
-	oscLayout->addWidget(noiseGroup);
+	leftLayout->addWidget(noiseGroup);
 
-	tabWidget->addTab(oscTab, tr("Oscillators & Mixer"));
-
-	// Tab 2: Filter & Envelopes
-	auto feTab = new QWidget(tabWidget);
-	auto feLayout = new QVBoxLayout(feTab);
-
-	auto filterGroup = new QGroupBox(tr("Resonant Multimode Filter"), feTab);
-	auto filterGrid = new QGridLayout(filterGroup);
-
-	m_filterTypeBox = new ComboBox(filterGroup);
-	m_filterCutoffKnob = new Knob(KnobType::Styled, tr("Cutoff"), filterGroup);
-	m_filterResKnob = new Knob(KnobType::Styled, tr("Resonance"), filterGroup);
-	m_filterSatKnob = new Knob(KnobType::Styled, tr("Saturation"), filterGroup);
-	m_filterKeyFollowKnob = new Knob(KnobType::Styled, tr("Key Follow"), filterGroup);
-	m_filterEnvAmtKnob = new Knob(KnobType::Styled, tr("Env Amount"), filterGroup);
-
-	filterGrid->addWidget(new QLabel(tr("Type:"), filterGroup), 0, 0);
-	filterGrid->addWidget(m_filterTypeBox, 0, 1);
-	filterGrid->addWidget(m_filterCutoffKnob, 0, 2);
-	filterGrid->addWidget(m_filterResKnob, 0, 3);
-	filterGrid->addWidget(m_filterSatKnob, 0, 4);
-	filterGrid->addWidget(m_filterKeyFollowKnob, 1, 2);
-	filterGrid->addWidget(m_filterEnvAmtKnob, 1, 3);
-	feLayout->addWidget(filterGroup);
-
-	auto envGroup = new QGroupBox(tr("Envelopes (Amp & Filter ADSR)"), feTab);
-	auto envGrid = new QGridLayout(envGroup);
-
-	m_ampAttackKnob = new Knob(KnobType::Styled, tr("Amp Att"), envGroup);
-	m_ampDecayKnob = new Knob(KnobType::Styled, tr("Amp Dec"), envGroup);
-	m_ampSustainKnob = new Knob(KnobType::Styled, tr("Amp Sus"), envGroup);
-	m_ampReleaseKnob = new Knob(KnobType::Styled, tr("Amp Rel"), envGroup);
-
-	m_filterAttackKnob = new Knob(KnobType::Styled, tr("Filt Att"), envGroup);
-	m_filterDecayKnob = new Knob(KnobType::Styled, tr("Filt Dec"), envGroup);
-	m_filterSustainKnob = new Knob(KnobType::Styled, tr("Filt Sus"), envGroup);
-	m_filterReleaseKnob = new Knob(KnobType::Styled, tr("Filt Rel"), envGroup);
-
-	envGrid->addWidget(new QLabel(tr("Amp ADSR:"), envGroup), 0, 0);
-	envGrid->addWidget(m_ampAttackKnob, 0, 1);
-	envGrid->addWidget(m_ampDecayKnob, 0, 2);
-	envGrid->addWidget(m_ampSustainKnob, 0, 3);
-	envGrid->addWidget(m_ampReleaseKnob, 0, 4);
-
-	envGrid->addWidget(new QLabel(tr("Filter ADSR:"), envGroup), 1, 0);
-	envGrid->addWidget(m_filterAttackKnob, 1, 1);
-	envGrid->addWidget(m_filterDecayKnob, 1, 2);
-	envGrid->addWidget(m_filterSustainKnob, 1, 3);
-	envGrid->addWidget(m_filterReleaseKnob, 1, 4);
-	feLayout->addWidget(envGroup);
-
-	tabWidget->addTab(feTab, tr("Filter & Envelopes"));
-
-	// Tab 3: LFOs & Effects
-	auto leTab = new QWidget(tabWidget);
-	auto leLayout = new QVBoxLayout(leTab);
-
-	auto lfoGroup = new QGroupBox(tr("Dual Modulation LFOs"), leTab);
+	// Dual LFOs
+	auto lfoGroup = new QGroupBox(tr("DUAL MODULATION LFOS"), leftCol);
 	auto lfoGrid = new QGridLayout(lfoGroup);
+	lfoGrid->setContentsMargins(6, 8, 6, 6);
 
 	m_lfo1WaveBox = new ComboBox(lfoGroup);
 	m_lfo1RateKnob = new Knob(KnobType::Styled, tr("LFO 1 Rate"), lfoGroup);
@@ -802,31 +1030,133 @@ void OxoSynthView::setupUI()
 	lfoGrid->addWidget(m_lfo2RateKnob, 1, 2);
 	lfoGrid->addWidget(m_lfo2DepthKnob, 1, 3);
 	lfoGrid->addWidget(m_lfo2DestBox, 1, 4);
-	leLayout->addWidget(lfoGroup);
+	leftLayout->addWidget(lfoGroup);
+	leftLayout->addStretch();
+	columnsLayout->addWidget(leftCol, 1);
 
-	auto fxGroup = new QGroupBox(tr("Effects & Master Controls"), leTab);
+	// ==========================================
+	// Right Column: Filter, Envelopes & Effects
+	// ==========================================
+	auto rightCol = new QWidget(columnsWidget);
+	auto rightLayout = new QVBoxLayout(rightCol);
+	rightLayout->setContentsMargins(0, 0, 0, 0);
+	rightLayout->setSpacing(4);
+
+	// Filter Group
+	auto filterGroup = new QGroupBox(tr("RESONANT MULTIMODE FILTER"), rightCol);
+	auto filterMainLayout = new QVBoxLayout(filterGroup);
+	filterMainLayout->setContentsMargins(6, 8, 6, 6);
+	filterMainLayout->setSpacing(4);
+
+	m_filterVisualizer = new OxoFilterVisualizer(filterGroup);
+	m_filterVisualizer->setFixedHeight(55);
+	filterMainLayout->addWidget(m_filterVisualizer);
+
+	auto filterGrid = new QGridLayout();
+	m_filterTypeBox = new ComboBox(filterGroup);
+	m_filterCutoffKnob = new Knob(KnobType::Styled, tr("Cutoff"), filterGroup);
+	m_filterResKnob = new Knob(KnobType::Styled, tr("Resonance"), filterGroup);
+	m_filterSatKnob = new Knob(KnobType::Styled, tr("Saturation"), filterGroup);
+	m_filterKeyFollowKnob = new Knob(KnobType::Styled, tr("Key Follow"), filterGroup);
+	m_filterEnvAmtKnob = new Knob(KnobType::Styled, tr("Env Amount"), filterGroup);
+
+	filterGrid->addWidget(new QLabel(tr("Type:"), filterGroup), 0, 0);
+	filterGrid->addWidget(m_filterTypeBox, 0, 1);
+	filterGrid->addWidget(m_filterCutoffKnob, 0, 2);
+	filterGrid->addWidget(m_filterResKnob, 0, 3);
+	filterGrid->addWidget(m_filterSatKnob, 0, 4);
+	filterGrid->addWidget(m_filterKeyFollowKnob, 1, 2);
+	filterGrid->addWidget(m_filterEnvAmtKnob, 1, 3);
+	filterMainLayout->addLayout(filterGrid);
+	rightLayout->addWidget(filterGroup);
+
+	// Envelopes Group
+	auto envGroup = new QGroupBox(tr("ENVELOPES (AMP & FILTER ADSR)"), rightCol);
+	auto envMainLayout = new QVBoxLayout(envGroup);
+	envMainLayout->setContentsMargins(6, 8, 6, 6);
+	envMainLayout->setSpacing(4);
+
+	auto envVisRow = new QHBoxLayout();
+	m_ampEnvVisualizer = new OxoEnvelopeVisualizer(tr("AMP ENVELOPE"), QColor(255, 68, 68), envGroup);
+	m_ampEnvVisualizer->setFixedHeight(48);
+	m_filterEnvVisualizer = new OxoEnvelopeVisualizer(tr("FILTER ENVELOPE"), QColor(255, 170, 0), envGroup);
+	m_filterEnvVisualizer->setFixedHeight(48);
+	envVisRow->addWidget(m_ampEnvVisualizer);
+	envVisRow->addWidget(m_filterEnvVisualizer);
+	envMainLayout->addLayout(envVisRow);
+
+	auto envGrid = new QGridLayout();
+	m_ampAttackKnob = new Knob(KnobType::Styled, tr("Amp Att"), envGroup);
+	m_ampDecayKnob = new Knob(KnobType::Styled, tr("Amp Dec"), envGroup);
+	m_ampSustainKnob = new Knob(KnobType::Styled, tr("Amp Sus"), envGroup);
+	m_ampReleaseKnob = new Knob(KnobType::Styled, tr("Amp Rel"), envGroup);
+
+	m_filterAttackKnob = new Knob(KnobType::Styled, tr("Filt Att"), envGroup);
+	m_filterDecayKnob = new Knob(KnobType::Styled, tr("Filt Dec"), envGroup);
+	m_filterSustainKnob = new Knob(KnobType::Styled, tr("Filt Sus"), envGroup);
+	m_filterReleaseKnob = new Knob(KnobType::Styled, tr("Filt Rel"), envGroup);
+
+	envGrid->addWidget(new QLabel(tr("Amp ADSR:"), envGroup), 0, 0);
+	envGrid->addWidget(m_ampAttackKnob, 0, 1);
+	envGrid->addWidget(m_ampDecayKnob, 0, 2);
+	envGrid->addWidget(m_ampSustainKnob, 0, 3);
+	envGrid->addWidget(m_ampReleaseKnob, 0, 4);
+
+	envGrid->addWidget(new QLabel(tr("Filter ADSR:"), envGroup), 1, 0);
+	envGrid->addWidget(m_filterAttackKnob, 1, 1);
+	envGrid->addWidget(m_filterDecayKnob, 1, 2);
+	envGrid->addWidget(m_filterSustainKnob, 1, 3);
+	envGrid->addWidget(m_filterReleaseKnob, 1, 4);
+	envMainLayout->addLayout(envGrid);
+	rightLayout->addWidget(envGroup);
+
+	// FX Group
+	auto fxGroup = new QGroupBox(tr("CHORUS & STEREO DELAY"), rightCol);
 	auto fxGrid = new QGridLayout(fxGroup);
+	fxGrid->setContentsMargins(6, 8, 6, 6);
 
-	m_masterVolKnob = new Knob(KnobType::Styled, tr("Master Vol"), fxGroup);
-	m_masterPanKnob = new Knob(KnobType::Styled, tr("Master Pan"), fxGroup);
 	m_chorusAmtKnob = new Knob(KnobType::Styled, tr("Chorus"), fxGroup);
 	m_chorusRateKnob = new Knob(KnobType::Styled, tr("Chorus Rate"), fxGroup);
 	m_delayTimeKnob = new Knob(KnobType::Styled, tr("Delay Time"), fxGroup);
-	m_delayFeedbackKnob = new Knob(KnobType::Styled, tr("Delay Feedbk"), fxGroup);
-	m_portamentoKnob = new Knob(KnobType::Styled, tr("Portamento"), fxGroup);
+	m_delayFeedbackKnob = new Knob(KnobType::Styled, tr("Delay Feedback"), fxGroup);
 
-	fxGrid->addWidget(m_masterVolKnob, 0, 0);
-	fxGrid->addWidget(m_masterPanKnob, 0, 1);
-	fxGrid->addWidget(m_chorusAmtKnob, 0, 2);
-	fxGrid->addWidget(m_chorusRateKnob, 0, 3);
-	fxGrid->addWidget(m_delayTimeKnob, 1, 0);
-	fxGrid->addWidget(m_delayFeedbackKnob, 1, 1);
-	fxGrid->addWidget(m_portamentoKnob, 1, 2);
-	leLayout->addWidget(fxGroup);
+	fxGrid->addWidget(m_chorusAmtKnob, 0, 0);
+	fxGrid->addWidget(m_chorusRateKnob, 0, 1);
+	fxGrid->addWidget(m_delayTimeKnob, 0, 2);
+	fxGrid->addWidget(m_delayFeedbackKnob, 0, 3);
+	rightLayout->addWidget(fxGroup);
+	rightLayout->addStretch();
+	columnsLayout->addWidget(rightCol, 1);
 
-	tabWidget->addTab(leTab, tr("LFOs & Effects"));
+	mainLayout->addWidget(columnsWidget);
+}
 
-	mainLayout->addWidget(tabWidget);
+void OxoSynthView::updateWaveformVisualizer()
+{
+	auto o = castModel<OxoSynthInstrument>();
+	if (!o || !m_waveVisualizer) { return; }
+	m_waveVisualizer->setWaveform(o->m_osc1Wave.value(), o->m_osc1PulseWidth.value());
+}
+
+void OxoSynthView::updateFilterVisualizer()
+{
+	auto o = castModel<OxoSynthInstrument>();
+	if (!o || !m_filterVisualizer) { return; }
+	m_filterVisualizer->setFilter(o->m_filterType.value(), o->m_filterCutoff.value(), o->m_filterResonance.value());
+}
+
+void OxoSynthView::updateAmpEnvelopeVisualizer()
+{
+	auto o = castModel<OxoSynthInstrument>();
+	if (!o || !m_ampEnvVisualizer) { return; }
+	m_ampEnvVisualizer->setEnvelope(o->m_ampAttack.value(), o->m_ampDecay.value(), o->m_ampSustain.value(), o->m_ampRelease.value());
+}
+
+void OxoSynthView::updateFilterEnvelopeVisualizer()
+{
+	auto o = castModel<OxoSynthInstrument>();
+	if (!o || !m_filterEnvVisualizer) { return; }
+	m_filterEnvVisualizer->setEnvelope(o->m_filterAttack.value(), o->m_filterDecay.value(), o->m_filterSustain.value(), o->m_filterRelease.value());
 }
 
 void OxoSynthView::modelChanged()
@@ -894,6 +1224,29 @@ void OxoSynthView::modelChanged()
 	m_delayTimeKnob->setModel(&o->m_delayTime);
 	m_delayFeedbackKnob->setModel(&o->m_delayFeedback);
 	m_portamentoKnob->setModel(&o->m_portamento);
+
+	// Connect visualizers to dynamic updates
+	connect(&o->m_osc1Wave, &Model::dataChanged, this, &OxoSynthView::updateWaveformVisualizer);
+	connect(&o->m_osc1PulseWidth, &Model::dataChanged, this, &OxoSynthView::updateWaveformVisualizer);
+
+	connect(&o->m_filterType, &Model::dataChanged, this, &OxoSynthView::updateFilterVisualizer);
+	connect(&o->m_filterCutoff, &Model::dataChanged, this, &OxoSynthView::updateFilterVisualizer);
+	connect(&o->m_filterResonance, &Model::dataChanged, this, &OxoSynthView::updateFilterVisualizer);
+
+	connect(&o->m_ampAttack, &Model::dataChanged, this, &OxoSynthView::updateAmpEnvelopeVisualizer);
+	connect(&o->m_ampDecay, &Model::dataChanged, this, &OxoSynthView::updateAmpEnvelopeVisualizer);
+	connect(&o->m_ampSustain, &Model::dataChanged, this, &OxoSynthView::updateAmpEnvelopeVisualizer);
+	connect(&o->m_ampRelease, &Model::dataChanged, this, &OxoSynthView::updateAmpEnvelopeVisualizer);
+
+	connect(&o->m_filterAttack, &Model::dataChanged, this, &OxoSynthView::updateFilterEnvelopeVisualizer);
+	connect(&o->m_filterDecay, &Model::dataChanged, this, &OxoSynthView::updateFilterEnvelopeVisualizer);
+	connect(&o->m_filterSustain, &Model::dataChanged, this, &OxoSynthView::updateFilterEnvelopeVisualizer);
+	connect(&o->m_filterRelease, &Model::dataChanged, this, &OxoSynthView::updateFilterEnvelopeVisualizer);
+
+	updateWaveformVisualizer();
+	updateFilterVisualizer();
+	updateAmpEnvelopeVisualizer();
+	updateFilterEnvelopeVisualizer();
 }
 
 } // namespace gui

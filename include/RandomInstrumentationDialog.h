@@ -38,24 +38,31 @@ public:
 		auto formLayout = new QFormLayout();
 		m_numInstrumentsSpin = new QSpinBox(this);
 		m_numInstrumentsSpin->setRange(1, 32);
-		m_numInstrumentsSpin->setValue(4);
+		m_numInstrumentsSpin->setValue(s_rememberedInstruments);
 		formLayout->addRow(tr("Number of instruments to generate:"), m_numInstrumentsSpin);
 
 		m_numEffectsSpin = new QSpinBox(this);
 		m_numEffectsSpin->setRange(0, 10);
-		m_numEffectsSpin->setValue(2);
+		m_numEffectsSpin->setValue(s_rememberedEffects);
 		formLayout->addRow(tr("Number of DSP effects per instrument:"), m_numEffectsSpin);
 
 		mainLayout->addLayout(formLayout);
 
 		auto buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-		connect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
+		connect(buttonBox, &QDialogButtonBox::accepted, this, [this]() {
+			s_rememberedInstruments = m_numInstrumentsSpin->value();
+			s_rememberedEffects = m_numEffectsSpin->value();
+			accept();
+		});
 		connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
 		mainLayout->addWidget(buttonBox);
 	}
 
 	int instrumentCount() const { return m_numInstrumentsSpin->value(); }
 	int effectCount() const { return m_numEffectsSpin->value(); }
+
+	static inline int s_rememberedInstruments = 4;
+	static inline int s_rememberedEffects = 2;
 
 private:
 	QSpinBox* m_numInstrumentsSpin;
@@ -102,6 +109,7 @@ inline void generateRandomInstrumentation(TrackContainer* container, int numTrac
 		}
 
 		it->randomizeParameters(false);
+		it->setMuted(false);
 		it->volumeModel()->setValue(75.0f + static_cast<float>(rand() % 25));
 	}
 

@@ -29,11 +29,12 @@ Ez a dokumentum az **LMMS Orion** teljes fejlesztési, felépítési és konfigu
 
 ## 2. Felépítési (Build) és Telepítési (Deploy) folyamat
 
-1. **Helyi inkrementális fordítás (másodpercek alatt a 12 szálon):**
+1. **Helyi inkrementális fordítás (mindig 3-4 processzormagot szabadon hagyva):**
    ```powershell
    powershell -ExecutionPolicy Bypass -File C:\lmms\lmms-repo\build-local.ps1
    ```
-   A script beállítja a `vcvars64.bat`-ot, a Ninja párhuzamos szálaival fordít, a kimenet pedig: `C:\lmms\lmms-repo\build\lmms.exe`.
+   A script beállítja a `vcvars64.bat`-ot, a processzor logikai magjaiból 3-4 magot szabadon hagy a gép reszponzivitásának megőrzésére (`[Math]::Max(1, $env:NUMBER_OF_PROCESSORS - 4)`, 12 szálnál 8 szálon fordít a Ninja), a kimenet pedig: `C:\lmms\lmms-repo\build\lmms.exe`.
+   > **KRITIKUS CPU SZABÁLY:** Bármilyen helyi compile/build vagy ninja feladat indításakor **KÖTELEZŐ** 3-4 processzormagot szabadon hagyni (`ninja -j 8` vagy `cmake --build build --parallel 8`), tilos az összes magot 100%-ra terhelni!
 
 2. **Hordozható (Portable) csomagolás:**
    ```powershell

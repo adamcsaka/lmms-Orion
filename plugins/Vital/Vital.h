@@ -16,6 +16,7 @@
 #include "Instrument.h"
 #include "InstrumentView.h"
 #include "SampleFrame.h"
+#include <QPushButton>
 
 namespace lmms
 {
@@ -97,6 +98,8 @@ public:
 	float desiredReleaseTimeMs() const override;
 
 	gui::PluginView* instantiateView(QWidget* parent) override;
+
+	static float calculateWaveSample(int waveType, float phase, float morph, int warpMode, float warpAmount);
 
 	// Models - Osc 1
 	ComboBoxModel m_osc1Wave;
@@ -189,6 +192,60 @@ public:
 namespace gui
 {
 
+class VitalWaveformVisualizer : public QWidget
+{
+	Q_OBJECT
+public:
+	explicit VitalWaveformVisualizer(QWidget* parent = nullptr);
+	void setWaveform(int waveType, float morph, int warpMode, float warpAmount);
+	void setActiveOsc(int oscNum);
+
+protected:
+	void paintEvent(QPaintEvent* event) override;
+
+private:
+	int m_oscNum = 1;
+	int m_waveType = 0;
+	float m_morph = 0.0f;
+	int m_warpMode = 0;
+	float m_warpAmount = 0.0f;
+};
+
+class VitalFilterVisualizer : public QWidget
+{
+	Q_OBJECT
+public:
+	explicit VitalFilterVisualizer(QWidget* parent = nullptr);
+	void setFilter(int type, float cutoff, float resonance);
+
+protected:
+	void paintEvent(QPaintEvent* event) override;
+
+private:
+	int m_type = 0;
+	float m_cutoff = 1000.0f;
+	float m_resonance = 1.0f;
+};
+
+class VitalEnvelopeVisualizer : public QWidget
+{
+	Q_OBJECT
+public:
+	explicit VitalEnvelopeVisualizer(const QString& title, const QColor& accentColor, QWidget* parent = nullptr);
+	void setEnvelope(float a, float d, float s, float r);
+
+protected:
+	void paintEvent(QPaintEvent* event) override;
+
+private:
+	QString m_title;
+	QColor m_accent;
+	float m_attack = 0.01f;
+	float m_decay = 0.3f;
+	float m_sustain = 0.7f;
+	float m_release = 0.2f;
+};
+
 class VitalView : public InstrumentView
 {
 	Q_OBJECT
@@ -198,8 +255,29 @@ public:
 
 	void modelChanged() override;
 
+	bool isResizable() const override { return true; }
+	QSize sizeHint() const override { return QSize(960, 600); }
+	QSize minimumSizeHint() const override { return QSize(880, 520); }
+
+public Q_SLOTS:
+	void updateWaveformVisualizer();
+	void updateFilterVisualizer();
+	void updateAmpEnvelopeVisualizer();
+	void updateFilterEnvelopeVisualizer();
+	void setPreviewOsc(int oscNum);
+
 private:
 	void setupUI();
+
+	int m_previewOsc = 1;
+	VitalWaveformVisualizer* m_waveformVisualizer = nullptr;
+	VitalFilterVisualizer* m_filterVisualizer = nullptr;
+	VitalEnvelopeVisualizer* m_ampEnvVisualizer = nullptr;
+	VitalEnvelopeVisualizer* m_filterEnvVisualizer = nullptr;
+
+	QPushButton* m_osc1SelectBtn = nullptr;
+	QPushButton* m_osc2SelectBtn = nullptr;
+	QPushButton* m_osc3SelectBtn = nullptr;
 
 	// Osc 1 controls
 	ComboBox* m_osc1WaveBox = nullptr;

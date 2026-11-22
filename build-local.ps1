@@ -49,9 +49,11 @@ if ($LASTEXITCODE -ne 0) {
     Write-Error "CMake configuration failed with exit code $LASTEXITCODE"
 }
 
-# 5. Build LMMS
-Write-Host "=== Compiling LMMS Orion ===" -ForegroundColor Cyan
-& cmd /c "`"$vcvars`" && cmake --build `"$repoDir\build`" --parallel"
+# 5. Build LMMS (Always leave 3-4 CPU cores free for system responsiveness)
+$totalProcessors = [System.Environment]::ProcessorCount
+$buildThreads = [Math]::Max(1, $totalProcessors - 4)
+Write-Host "=== Compiling LMMS Orion ($totalProcessors CPU threads detected, reserving 4 cores, using $buildThreads build threads) ===" -ForegroundColor Cyan
+& cmd /c "`"$vcvars`" && cmake --build `"$repoDir\build`" --parallel $buildThreads"
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "=== BUILD SUCCESSFUL! ===" -ForegroundColor Green

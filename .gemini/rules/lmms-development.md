@@ -20,3 +20,12 @@ globs: **/*
 - Always follow `C:\lmms\lmms-repo\LMMS_ORION_MASTER_GUIDE.md`.
 - Git commands must always pass `-c credential.helper=` to prevent credential popup hangs on Windows.
 - Local compilation with Ninja/MSVC is prioritized over remote runners for rapid turnaround.
+
+## 5. Build Concurrency & CPU Core Reservation
+- **MANDATORY:** Always leave 3-4 CPU cores/threads free when initiating compile/build or ninja tasks (e.g. `ninja -j 8` or `cmake --build build --parallel ([Math]::Max(1, $env:NUMBER_OF_PROCESSORS - 4))`). Never saturate 100% of all CPU threads so that the user's system remains smoothly responsive during builds.
+
+## 6. Randomization & Routing Invariants
+- When randomizing instruments or tracks (`randomizeParameters`, random synths generation, reordering):
+  - NEVER modify track MIDI group numbers (`m_midiGroupModel`).
+  - NEVER modify mixer channel assignments or routing bonds (`m_mixerChannelModel`).
+  - NEVER mute instruments (`m_mutedModel`). Instruments must remain audible and properly routed to their assigned mixer channels and MIDI groups.
