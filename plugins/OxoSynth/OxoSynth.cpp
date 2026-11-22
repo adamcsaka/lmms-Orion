@@ -861,6 +861,8 @@ void OxoEnvelopeVisualizer::paintEvent(QPaintEvent*)
 OxoSynthView::OxoSynthView(Instrument* instrument, QWidget* parent) :
 	InstrumentView(instrument, parent)
 {
+	setMinimumSize(minimumSizeHint());
+	setMaximumSize(QSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX));
 	setupUI();
 }
 
@@ -1226,22 +1228,22 @@ void OxoSynthView::modelChanged()
 	m_portamentoKnob->setModel(&o->m_portamento);
 
 	// Connect visualizers to dynamic updates
-	connect(&o->m_osc1Wave, &Model::dataChanged, this, &OxoSynthView::updateWaveformVisualizer);
-	connect(&o->m_osc1PulseWidth, &Model::dataChanged, this, &OxoSynthView::updateWaveformVisualizer);
+	connect(&o->m_osc1Wave, &Model::dataChanged, this, &OxoSynthView::updateWaveformVisualizer, Qt::UniqueConnection);
+	connect(&o->m_osc1PulseWidth, &Model::dataChanged, this, &OxoSynthView::updateWaveformVisualizer, Qt::UniqueConnection);
 
-	connect(&o->m_filterType, &Model::dataChanged, this, &OxoSynthView::updateFilterVisualizer);
-	connect(&o->m_filterCutoff, &Model::dataChanged, this, &OxoSynthView::updateFilterVisualizer);
-	connect(&o->m_filterResonance, &Model::dataChanged, this, &OxoSynthView::updateFilterVisualizer);
+	connect(&o->m_filterType, &Model::dataChanged, this, &OxoSynthView::updateFilterVisualizer, Qt::UniqueConnection);
+	connect(&o->m_filterCutoff, &Model::dataChanged, this, &OxoSynthView::updateFilterVisualizer, Qt::UniqueConnection);
+	connect(&o->m_filterResonance, &Model::dataChanged, this, &OxoSynthView::updateFilterVisualizer, Qt::UniqueConnection);
 
-	connect(&o->m_ampAttack, &Model::dataChanged, this, &OxoSynthView::updateAmpEnvelopeVisualizer);
-	connect(&o->m_ampDecay, &Model::dataChanged, this, &OxoSynthView::updateAmpEnvelopeVisualizer);
-	connect(&o->m_ampSustain, &Model::dataChanged, this, &OxoSynthView::updateAmpEnvelopeVisualizer);
-	connect(&o->m_ampRelease, &Model::dataChanged, this, &OxoSynthView::updateAmpEnvelopeVisualizer);
+	connect(&o->m_ampAttack, &Model::dataChanged, this, &OxoSynthView::updateAmpEnvelopeVisualizer, Qt::UniqueConnection);
+	connect(&o->m_ampDecay, &Model::dataChanged, this, &OxoSynthView::updateAmpEnvelopeVisualizer, Qt::UniqueConnection);
+	connect(&o->m_ampSustain, &Model::dataChanged, this, &OxoSynthView::updateAmpEnvelopeVisualizer, Qt::UniqueConnection);
+	connect(&o->m_ampRelease, &Model::dataChanged, this, &OxoSynthView::updateAmpEnvelopeVisualizer, Qt::UniqueConnection);
 
-	connect(&o->m_filterAttack, &Model::dataChanged, this, &OxoSynthView::updateFilterEnvelopeVisualizer);
-	connect(&o->m_filterDecay, &Model::dataChanged, this, &OxoSynthView::updateFilterEnvelopeVisualizer);
-	connect(&o->m_filterSustain, &Model::dataChanged, this, &OxoSynthView::updateFilterEnvelopeVisualizer);
-	connect(&o->m_filterRelease, &Model::dataChanged, this, &OxoSynthView::updateFilterEnvelopeVisualizer);
+	connect(&o->m_filterAttack, &Model::dataChanged, this, &OxoSynthView::updateFilterEnvelopeVisualizer, Qt::UniqueConnection);
+	connect(&o->m_filterDecay, &Model::dataChanged, this, &OxoSynthView::updateFilterEnvelopeVisualizer, Qt::UniqueConnection);
+	connect(&o->m_filterSustain, &Model::dataChanged, this, &OxoSynthView::updateFilterEnvelopeVisualizer, Qt::UniqueConnection);
+	connect(&o->m_filterRelease, &Model::dataChanged, this, &OxoSynthView::updateFilterEnvelopeVisualizer, Qt::UniqueConnection);
 
 	updateWaveformVisualizer();
 	updateFilterVisualizer();

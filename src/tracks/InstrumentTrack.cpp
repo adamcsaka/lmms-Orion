@@ -1193,7 +1193,8 @@ void InstrumentTrack::randomizeParameters(bool randomizePitch)
 		const QString name = (m->displayName().isEmpty() ? m->objectName() : m->displayName()).toLower();
 		if (name.contains("mute") || name.contains("solo") ||
 			name.contains("mixer") || name.contains("channel") ||
-			name.contains("group") || name.contains("routing") || name.contains("route"))
+			name.contains("group") || name.contains("routing") || name.contains("route") ||
+			name.contains("bypass"))
 		{
 			continue;
 		}
@@ -1206,7 +1207,7 @@ void InstrumentTrack::randomizeParameters(bool randomizePitch)
 			continue;
 		}
 
-		if (name.contains("osc 1 enabled") || name.contains("oscillator 1 enabled") || name.contains("osc1 enabled"))
+		if (name.contains("enable") || name.contains("active") || name.contains("power"))
 		{
 			if (auto bm = m->dynamicCast<BoolModel>())
 			{
@@ -1314,6 +1315,11 @@ void InstrumentTrack::randomizeParameters(bool randomizePitch)
 			}
 		}
 	}
+
+	// Invariant: Guarantee instruments are audible, never left muted or soloed
+	m_mutedModel.setValue(false);
+	setMuted(false);
+	m_soloModel.setValue(false);
 
 	if (Engine::getSong())
 	{

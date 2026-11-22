@@ -1180,6 +1180,8 @@ void VitalEnvelopeVisualizer::paintEvent(QPaintEvent*)
 VitalView::VitalView(Instrument* instrument, QWidget* parent) :
 	InstrumentView(instrument, parent)
 {
+	setMinimumSize(minimumSizeHint());
+	setMaximumSize(QSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX));
 	setupUI();
 }
 
@@ -1638,34 +1640,34 @@ void VitalView::modelChanged()
 	m_reverbMixKnob->setModel(&v->m_reverbMix);
 
 	// Hook visualizer updates to model change signals
-	connect(&v->m_osc1Wave, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer);
-	connect(&v->m_osc1Morph, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer);
-	connect(&v->m_osc1WarpMode, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer);
-	connect(&v->m_osc1WarpAmount, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer);
+	connect(&v->m_osc1Wave, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer, Qt::UniqueConnection);
+	connect(&v->m_osc1Morph, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer, Qt::UniqueConnection);
+	connect(&v->m_osc1WarpMode, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer, Qt::UniqueConnection);
+	connect(&v->m_osc1WarpAmount, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer, Qt::UniqueConnection);
 
-	connect(&v->m_osc2Wave, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer);
-	connect(&v->m_osc2Morph, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer);
-	connect(&v->m_osc2WarpMode, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer);
-	connect(&v->m_osc2WarpAmount, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer);
+	connect(&v->m_osc2Wave, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer, Qt::UniqueConnection);
+	connect(&v->m_osc2Morph, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer, Qt::UniqueConnection);
+	connect(&v->m_osc2WarpMode, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer, Qt::UniqueConnection);
+	connect(&v->m_osc2WarpAmount, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer, Qt::UniqueConnection);
 
-	connect(&v->m_osc3Wave, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer);
-	connect(&v->m_osc3Morph, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer);
-	connect(&v->m_osc3WarpMode, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer);
-	connect(&v->m_osc3WarpAmount, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer);
+	connect(&v->m_osc3Wave, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer, Qt::UniqueConnection);
+	connect(&v->m_osc3Morph, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer, Qt::UniqueConnection);
+	connect(&v->m_osc3WarpMode, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer, Qt::UniqueConnection);
+	connect(&v->m_osc3WarpAmount, &Model::dataChanged, this, &VitalView::updateWaveformVisualizer, Qt::UniqueConnection);
 
-	connect(&v->m_filter1Type, &Model::dataChanged, this, &VitalView::updateFilterVisualizer);
-	connect(&v->m_filter1Cutoff, &Model::dataChanged, this, &VitalView::updateFilterVisualizer);
-	connect(&v->m_filter1Resonance, &Model::dataChanged, this, &VitalView::updateFilterVisualizer);
+	connect(&v->m_filter1Type, &Model::dataChanged, this, &VitalView::updateFilterVisualizer, Qt::UniqueConnection);
+	connect(&v->m_filter1Cutoff, &Model::dataChanged, this, &VitalView::updateFilterVisualizer, Qt::UniqueConnection);
+	connect(&v->m_filter1Resonance, &Model::dataChanged, this, &VitalView::updateFilterVisualizer, Qt::UniqueConnection);
 
-	connect(&v->m_ampAttack, &Model::dataChanged, this, &VitalView::updateAmpEnvelopeVisualizer);
-	connect(&v->m_ampDecay, &Model::dataChanged, this, &VitalView::updateAmpEnvelopeVisualizer);
-	connect(&v->m_ampSustain, &Model::dataChanged, this, &VitalView::updateAmpEnvelopeVisualizer);
-	connect(&v->m_ampRelease, &Model::dataChanged, this, &VitalView::updateAmpEnvelopeVisualizer);
+	connect(&v->m_ampAttack, &Model::dataChanged, this, &VitalView::updateAmpEnvelopeVisualizer, Qt::UniqueConnection);
+	connect(&v->m_ampDecay, &Model::dataChanged, this, &VitalView::updateAmpEnvelopeVisualizer, Qt::UniqueConnection);
+	connect(&v->m_ampSustain, &Model::dataChanged, this, &VitalView::updateAmpEnvelopeVisualizer, Qt::UniqueConnection);
+	connect(&v->m_ampRelease, &Model::dataChanged, this, &VitalView::updateAmpEnvelopeVisualizer, Qt::UniqueConnection);
 
-	connect(&v->m_filterAttack, &Model::dataChanged, this, &VitalView::updateFilterEnvelopeVisualizer);
-	connect(&v->m_filterDecay, &Model::dataChanged, this, &VitalView::updateFilterEnvelopeVisualizer);
-	connect(&v->m_filterSustain, &Model::dataChanged, this, &VitalView::updateFilterEnvelopeVisualizer);
-	connect(&v->m_filterRelease, &Model::dataChanged, this, &VitalView::updateFilterEnvelopeVisualizer);
+	connect(&v->m_filterAttack, &Model::dataChanged, this, &VitalView::updateFilterEnvelopeVisualizer, Qt::UniqueConnection);
+	connect(&v->m_filterDecay, &Model::dataChanged, this, &VitalView::updateFilterEnvelopeVisualizer, Qt::UniqueConnection);
+	connect(&v->m_filterSustain, &Model::dataChanged, this, &VitalView::updateFilterEnvelopeVisualizer, Qt::UniqueConnection);
+	connect(&v->m_filterRelease, &Model::dataChanged, this, &VitalView::updateFilterEnvelopeVisualizer, Qt::UniqueConnection);
 
 	updateWaveformVisualizer();
 	updateFilterVisualizer();

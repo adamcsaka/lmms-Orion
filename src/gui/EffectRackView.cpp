@@ -486,15 +486,16 @@ void EffectRackView::randomizeEffects()
 {
 	if (!fxChain()) { return; }
 
-	static int s_rememberedEffectCount = 3;
+	int initialCount = ConfigManager::inst()->value("ui", "random_rack_effect_count", "3").toInt();
+	if (initialCount < 1 || initialCount > 10) { initialCount = 3; }
 	bool ok = false;
 	int count = QInputDialog::getInt(
 		this,
 		tr("Randomize Effect Rack"),
 		tr("Number of random effects to generate:"),
-		s_rememberedEffectCount, 1, 10, 1, &ok);
+		initialCount, 1, 10, 1, &ok);
 	if (!ok || count <= 0) { return; }
-	s_rememberedEffectCount = count;
+	ConfigManager::inst()->setValue("ui", "random_rack_effect_count", QString::number(count));
 
 	const char* fxPlugins[] = {
 		"amplifier", "bassbooster", "bitcrush", "crossovereq", "delay",
