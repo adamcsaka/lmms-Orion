@@ -24,11 +24,13 @@ globs: **/*
 ## 5. Build Concurrency & CPU Core Reservation
 - **MANDATORY:** Always leave 3-4 CPU cores/threads free when initiating compile/build or ninja tasks (e.g. `ninja -j 8` or `cmake --build build --parallel ([Math]::Max(1, $env:NUMBER_OF_PROCESSORS - 4))`). Never saturate 100% of all CPU threads so that the user's system remains smoothly responsive during builds.
 
-## 6. Randomization & Routing Invariants
+## 6. Randomization, Routing Invariants & Audio Safety
 - When randomizing instruments or tracks (`randomizeParameters`, random synths generation, reordering):
   - NEVER modify track MIDI group numbers (`m_midiGroupModel`).
   - NEVER modify mixer channel assignments or routing bonds (`m_mixerChannelModel`).
   - NEVER mute instruments (`m_mutedModel`). Instruments must remain audible and properly routed to their assigned mixer channels and MIDI groups.
+  - **Audio Safety Limits:** Enforce safe ceilings on master volume, oscillator gains, and filter resonance (Q) to avoid ear-damaging volume blasts.
+  - **Undo Preservation:** Always create an undo snapshot (`Song::saveUndoState`) prior to batch operations or randomization.
 
 ## 7. Multi-Session Awareness & Prior State Inspection
 - **Git Repositories:** Before beginning any bug analysis, code changes, or computations, **ALWAYS** check recent git commits (`git log -n 5`) and `git status`. In multi-window/collaborative environments, another session or process may have already resolved or committed the fix.
@@ -39,3 +41,10 @@ globs: **/*
 - Always notify the user beforehand: ask clarifying questions, explain what needs to be done, and obtain the user's explicit alignment before initiating subagents.
 - **Proactive Suggestions:** Whenever a task is complex, multi-modular, architectural, or would significantly benefit from `/boost` or `/teamwork`, PROACTIVELY recommend it to the user immediately and ask if they wish to activate it.
 - Favor direct, transparent execution in the main conversation for fast turnaround.
+
+## 9. Non-Blocking Responses During Background Tasks
+- When background processes (builds, packaging, tests) are running, answer user inquiries immediately in text without waiting or blocking on the background task.
+
+## 10. Crash Prevention & Identifier Validation
+- Explicitly guard all dynamic pointers (`Track*`, `Instrument*`, `Effect*`) with `nullptr` checks before dereferencing.
+- Never guess plugin library names or filenames from memory; check disk binaries and symbols (`dumpbin /exports`) before referencing.
