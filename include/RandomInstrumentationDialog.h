@@ -90,7 +90,7 @@ inline void generateRandomInstrumentation(TrackContainer* container, int numTrac
 	// Only rock-solid, fully native LMMS synthesizers (excluding experimental or crash-prone plugins)
 	const char* synthPlugins[] = {
 		"tripleoscillator", "bitinvader", "monstro", "watsyn",
-		"organic", "freeboy", "nes", "kicker", "sfxr", "vibed", "lb302"
+		"organic", "freeboy", "nes", "kicker", "sfxr", "vibedstrings", "lb302"
 	};
 	const int numPlugins = sizeof(synthPlugins) / sizeof(synthPlugins[0]);
 
