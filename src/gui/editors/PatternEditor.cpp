@@ -380,7 +380,7 @@ PatternEditorWindow::PatternEditorWindow(PatternStore* ps) :
 
 	trackAndStepActionsToolBar->addSeparator();
 
-	auto genRandomBtn = new QToolButton(m_toolBar);
+	auto genRandomBtn = new QToolButton(trackAndStepActionsToolBar);
 	genRandomBtn->setText(tr("Random Synths..."));
 	genRandomBtn->setIcon(embed::getIconPixmap("arp_random"));
 	genRandomBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
@@ -394,7 +394,7 @@ PatternEditorWindow::PatternEditorWindow(PatternStore* ps) :
 	});
 	trackAndStepActionsToolBar->addWidget(genRandomBtn);
 
-	auto randomizeAllBtn = new QToolButton(m_toolBar);
+	auto randomizeAllBtn = new QToolButton(trackAndStepActionsToolBar);
 	randomizeAllBtn->setText(tr("Randomize All"));
 	randomizeAllBtn->setIcon(embed::getIconPixmap("random_wave_active"));
 	randomizeAllBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
@@ -405,7 +405,7 @@ PatternEditorWindow::PatternEditorWindow(PatternStore* ps) :
 			{
 				auto it = dynamic_cast<InstrumentTrack*>(t);
 				if (!it) { continue; }
-				it->randomizeParameters(true);
+				it->randomizeParameters(false);
 			}
 		};
 

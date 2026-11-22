@@ -1183,7 +1183,7 @@ void InstrumentTrack::randomizeParameters(bool randomizePitch)
 	{
 		if (!m || m == &m_pitchModel || m == &m_volumeModel || m == &m_panningModel) { continue; }
 
-		const QString name = m->displayName().toLower();
+		const QString name = (m->displayName().isEmpty() ? m->objectName() : m->displayName()).toLower();
 		if (name.contains("master volume") || name.contains("master vol"))
 		{
 			if (auto fm = m->dynamicCast<FloatModel>())
@@ -1193,7 +1193,7 @@ void InstrumentTrack::randomizeParameters(bool randomizePitch)
 			continue;
 		}
 
-		if (name.contains("osc 1 enabled") || name.contains("oscillator 1 enabled"))
+		if (name.contains("osc 1 enabled") || name.contains("oscillator 1 enabled") || name.contains("osc1 enabled"))
 		{
 			if (auto bm = m->dynamicCast<BoolModel>())
 			{
@@ -1202,7 +1202,7 @@ void InstrumentTrack::randomizeParameters(bool randomizePitch)
 			continue;
 		}
 
-		if (!randomizePitch && (name.contains("coarse") || name.contains("semitone") || name.contains("octave") || name.contains("pitch")))
+		if (!randomizePitch && (name.contains("coarse") || name.contains("semi") || name.contains("octave") || name.contains("pitch") || name.contains("detun") || name.contains("fine")))
 		{
 			continue;
 		}
@@ -1239,7 +1239,7 @@ void InstrumentTrack::randomizeParameters(bool randomizePitch)
 			continue;
 		}
 
-		if (name.contains("osc 1 vol") || name.contains("osc 1 volume"))
+		if (name.contains("osc 1 vol") || name.contains("osc 1 volume") || name.contains("osc 1 level") || name.contains("osc1 vol") || name.contains("osc1 level"))
 		{
 			if (auto fm = m->dynamicCast<FloatModel>())
 			{

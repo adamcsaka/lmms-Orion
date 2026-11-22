@@ -39,6 +39,8 @@
 #include "InstrumentTrack.h"
 #include "InstrumentTrackView.h"
 #include "InstrumentTrackWindow.h"
+#include "PatternEditor.h"
+#include "PatternStore.h"
 #include "Song.h"
 #include "SongEditor.h"
 #include "StringPairDrag.h"
@@ -302,7 +304,12 @@ void PluginDescWidget::mouseDoubleClickEvent( QMouseEvent * _me )
 {
 	if ( _me->button() == Qt::LeftButton )
 	{
-		openInNewInstrumentTrack( QString::fromUtf8(m_pluginKey.desc->name) );
+		TrackContainer* targetContainer = Engine::getSong();
+		if (getGUI() && getGUI()->patternEditor() && getGUI()->patternEditor()->isVisible() && getGUI()->patternEditor()->isActiveWindow())
+		{
+			targetContainer = Engine::patternStore();
+		}
+		openInTrackContainer( targetContainer, QString::fromUtf8(m_pluginKey.desc->name) );
 	}
 }
 
@@ -311,8 +318,12 @@ void PluginDescWidget::contextMenuEvent(QContextMenuEvent* e)
 {
 	QMenu contextMenu(this);
 	contextMenu.addAction(
-		tr("Send to new instrument track"),
-		[=, this]{ openInNewInstrumentTrack(QString::fromUtf8(m_pluginKey.desc->name)); }
+		tr("Send to Song Editor (new track)"),
+		[=, this]{ openInTrackContainer(Engine::getSong(), QString::fromUtf8(m_pluginKey.desc->name)); }
+	);
+	contextMenu.addAction(
+		tr("Send to Pattern Editor (new track)"),
+		[=, this]{ openInTrackContainer(Engine::patternStore(), QString::fromUtf8(m_pluginKey.desc->name)); }
 	);
 	contextMenu.exec(e->globalPos());
 }
@@ -320,13 +331,19 @@ void PluginDescWidget::contextMenuEvent(QContextMenuEvent* e)
 
 void PluginDescWidget::openInNewInstrumentTrack(QString value)
 {
-	TrackContainer* tc = Engine::getSong();
+	openInTrackContainer(Engine::getSong(), value);
+}
+
+
+void PluginDescWidget::openInTrackContainer(lmms::TrackContainer* tc, QString value)
+{
+	if (!tc) { tc = Engine::getSong(); }
 	auto it = dynamic_cast<InstrumentTrack*>(Track::create(Track::Type::Instrument, tc));
 	auto ilt = new InstrumentLoaderThread(this, it, value);
-	connect(ilt, &QThread::finished, [it]() {
-		if (getGUI() && getGUI()->songEditor() && getGUI()->songEditor()->m_editor)
-		{
-			for (TrackView* tv : getGUI()->songEditor()->m_editor->trackViews())
+	connect(ilt, &QThread::finished, [tc, it]() {
+		auto findAndOpenWindow = [it](TrackContainerView* tcv) {
+			if (!tcv) { return false; }
+			for (TrackView* tv : tcv->trackViews())
 			{
 				if (tv && tv->getTrack() == it)
 				{
@@ -334,9 +351,19 @@ void PluginDescWidget::openInNewInstrumentTrack(QString value)
 					{
 						itv->getInstrumentTrackWindow()->toggleVisibility(true);
 					}
-					break;
+					return true;
 				}
 			}
+			return false;
+		};
+
+		if (tc == Engine::patternStore() && getGUI() && getGUI()->patternEditor())
+		{
+			if (findAndOpenWindow(getGUI()->patternEditor()->m_editor)) { return; }
+		}
+		if (getGUI() && getGUI()->songEditor())
+		{
+			findAndOpenWindow(getGUI()->songEditor()->m_editor);
 		}
 	});
 	ilt->start();

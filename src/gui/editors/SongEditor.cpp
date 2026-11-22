@@ -981,7 +981,7 @@ SongEditorWindow::SongEditorWindow(Song* song) :
 
 	trackActionsToolBar->addSeparator();
 
-	auto genRandomBtn = new QToolButton(m_toolBar);
+	auto genRandomBtn = new QToolButton(trackActionsToolBar);
 	genRandomBtn->setText(tr("Random Synths..."));
 	genRandomBtn->setIcon(embed::getIconPixmap("arp_random"));
 	genRandomBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
@@ -995,7 +995,7 @@ SongEditorWindow::SongEditorWindow(Song* song) :
 	});
 	trackActionsToolBar->addWidget(genRandomBtn);
 
-	auto randomizeAllBtn = new QToolButton(m_toolBar);
+	auto randomizeAllBtn = new QToolButton(trackActionsToolBar);
 	randomizeAllBtn->setText(tr("Randomize All"));
 	randomizeAllBtn->setIcon(embed::getIconPixmap("random_wave_active"));
 	randomizeAllBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
@@ -1006,7 +1006,7 @@ SongEditorWindow::SongEditorWindow(Song* song) :
 			{
 				auto it = dynamic_cast<InstrumentTrack*>(t);
 				if (!it) { continue; }
-				it->randomizeParameters(true);
+				it->randomizeParameters(false);
 			}
 		};
 

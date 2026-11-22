@@ -67,10 +67,13 @@ void InstrumentLoaderThread::run()
 {
 	Instrument *i = m_it->loadInstrument(m_name, nullptr,
 										 true /*always DnD*/);
-	QObject *parent = i->parent();
-	i->setParent( 0 );
-	i->moveToThread( m_containerThread );
-	i->setParent( parent );
+	if (i)
+	{
+		QObject *parent = i->parent();
+		i->setParent( 0 );
+		i->moveToThread( m_containerThread );
+		i->setParent( parent );
+	}
 }
 
 namespace gui
