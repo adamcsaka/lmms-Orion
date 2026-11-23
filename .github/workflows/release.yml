@@ -155,9 +155,9 @@ jobs:
             build/*.tar.gz
 
   macos:
-    name: Build macOS x86_64 DMG
+    name: Build macOS DMG
     continue-on-error: true
-    runs-on: macos-13
+    runs-on: macos-latest
     env:
       CMAKE_BUILD_PARALLEL_LEVEL: 4
       HOMEBREW_NO_AUTO_UPDATE: 1
@@ -199,10 +199,21 @@ jobs:
             build/*.dmg
             build/*.zip
 
+      - name: Publish macOS to Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        with:
+          tag_name: ${{ github.ref_name || inputs.tag_name || 'v7.0.0' }}
+          files: |
+            build/*.dmg
+            build/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   publish-release:
     name: Publish GitHub Release
-    if: always() && (needs.windows.result == 'success' || needs.linux.result == 'success' || needs.macos.result == 'success')
-    needs: [windows, linux, macos]
+    if: always() && (needs.windows.result == 'success' || needs.linux.result == 'success')
+    needs: [windows, linux]
     runs-on: ubuntu-latest
     steps:
       - name: Download all build artifacts
@@ -237,7 +248,8 @@ jobs:
           tag_name: ${{ steps.meta.outputs.tag }}
           name: ${{ steps.meta.outputs.title }}
           prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}
-          generate_release_notes: true
+          body_path: .github/RELEASE_NOTES_v7.md
+          generate_release_notes: false
           files: final-assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
