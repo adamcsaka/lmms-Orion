@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [v7.0.0] - 2026-11-23
 
 ### Added
+- **Multi-Platform Automated Cloud Release Pipeline (`.github/workflows/release.yml`):** Added a GitHub Actions release automation workflow capable of building and publishing complete release assets for Windows (x64 Portable ZIP & NSIS Installer), Linux (Ubuntu 24.04 AppImage), and macOS (Apple Silicon / Universal DMG) in the cloud with zero host CPU load. Supports one-click manual triggers (`workflow_dispatch`) and automated publishing upon tag pushes (`v*`), attaching all platform binaries directly to GitHub Releases with auto-generated release notes.
 - **Dynamic Theme, Appearance & Color Palette Customization (`ThemeManager` & `ThemeDialog`):** Introduced a zero-overhead, 100% native Qt styling and theme management engine.
   - **Dedicated Theme Dialog:** Accessible via the main toolbar (colorize palette icon, Ctrl+8) and `Edit -> Theme & Appearance...`. Allows live color customization of Accent (LEDs, active buttons, knobs, selections), Base Panel (toolbars, docks), and Workspace background.
   - **5 Factory Presets:** Built-in curated palettes (*Orion Obsidian Gold*, *Cyber Neon Cyan*, *Studio Dark Lime*, *Solarized Amber*, and *Classic LMMS*) with instant live switching without restart, plus user preset saving and loading (`.lmms-theme` JSON files).

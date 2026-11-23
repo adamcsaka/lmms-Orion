@@ -367,27 +367,27 @@ jobs:
           CCACHE_MAXSIZE: 500M
   msvc:
     name: msvc-x64
-    runs-on: windows-2025-vs2026
+    runs-on: windows-2022
     env:
       CCACHE_MAXSIZE: 0
       CCACHE_NOCOMPRESS: 1
       CMAKE_BUILD_PARALLEL_LEVEL: 4
     steps:
       - name: Check out
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: recursive
       - name: Cache vcpkg dependencies
         id: cache-deps
-        uses: actions/cache@v6
+        uses: actions/cache@v4
         with:
           key: vcpkg-msvc-x86_64-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
             vcpkg-msvc-x86_64-
           path: build\vcpkg_installed
       - name: Cache ccache data
-        uses: actions/cache@v6
+        uses: actions/cache@v4
         with:
           # yamllint disable rule:line-length
           key: "ccache-${{ github.job }}-x64-${{ github.ref }}\
@@ -441,7 +441,7 @@ jobs:
           cmake --install build --prefix build\portable
           Compress-Archive -Path build\portable\* -DestinationPath build\lmms-win64-portable.zip
       - name: Upload portable zip
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: lmms-win64-portable
           path: build\lmms-win64-portable.zip
