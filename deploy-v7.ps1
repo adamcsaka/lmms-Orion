@@ -1,4 +1,4 @@
-﻿# LMMS Orion v7 Portable Deployment Script
+# LMMS Orion v7 Portable Deployment Script
 param (
     [string]$TargetDir = "C:\Users\ahsoka\Downloads\LMMS-Orion-v7"
 )
@@ -79,6 +79,15 @@ if (-not (Test-Path "$dest\dxgi.dll") -and (Test-Path "$vcmiReShade\dxgi.dll")) 
         } | Set-Content "$dest\ReShade.ini"
     }
 }
+
+# Create a convenient ReShade launcher batch script
+$launcherContent = @"
+@echo off
+set QT_WIDGETS_RHI=1
+set QSG_RHI_BACKEND=d3d11
+start "" "%~dp0lmms.exe" %*
+"@
+Set-Content -Path "$dest\launch-reshade.bat" -Value $launcherContent -Encoding ASCII
 
 Write-Host "Running windeployqt..."
 & "C:\Qt\6.8.0\msvc2022_64\bin\windeployqt.exe" --no-translations --compiler-runtime "$dest\lmms.exe"
