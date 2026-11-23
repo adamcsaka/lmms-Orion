@@ -77,13 +77,14 @@ SlicerT::SlicerT(InstrumentTrack* instrumentTrack)
 
 void SlicerT::playNote(NotePlayHandle* handle, SampleFrame* workingBuffer)
 {
-	if (m_originalSample.sampleSize() <= 1) { return; }
+	if (!handle || !m_parentTrack || m_originalSample.sampleSize() <= 1) { return; }
 
 	int noteIndex = handle->key() - m_parentTrack->baseNote();
 	const f_cnt_t frames = handle->framesLeftForCurrentPeriod();
 	const f_cnt_t offset = handle->noteOffset();
 	const int bpm = Engine::getSong()->getTempo();
-	const float pitchRatio = 1 / std::exp2(m_parentTrack->pitchModel()->value() / 1200);
+	const float pitchValue = m_parentTrack->pitchModel() ? m_parentTrack->pitchModel()->value() : 0.0f;
+	const float pitchRatio = 1 / std::exp2(pitchValue / 1200);
 
 	float speedRatio = static_cast<float>(m_originalBPM.value()) / bpm;
 	if (!m_enableSync.value()) { speedRatio = 1; }
@@ -137,7 +138,11 @@ void SlicerT::playNote(NotePlayHandle* handle, SampleFrame* workingBuffer)
 
 void SlicerT::deleteNotePluginData(NotePlayHandle* handle)
 {
-	delete static_cast<Sample::PlaybackState*>(handle->m_pluginData);
+	if (handle && handle->m_pluginData)
+	{
+		delete static_cast<Sample::PlaybackState*>(handle->m_pluginData);
+		handle->m_pluginData = nullptr;
+	}
 	emit isPlaying(-1, 0, 0);
 }
 
