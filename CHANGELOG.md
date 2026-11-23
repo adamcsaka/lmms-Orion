@@ -6,13 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [v7.0.0] - In Progress / Milestone
+## [v7.0.0] - 2026-11-23
+
+### Added
+- **60 FPS GUI Modulation Throttling & Audio Thread Decoupling:** Decoupled the real-time audio thread from flooding Qt's main event queue. `Controller::triggerFrameCounter()` now marks dirty state via an atomic flag (`s_guiUpdateNeeded`), while `MainWindow::timerEvent` dispatches `Controller::updateGuiControllers()` at a steady 60 FPS directly within the main GUI thread. Eliminates thousands of cross-thread `QMetaCallEvent` allocations per second and eradicates interface lag and mouse stutter during active LFO, automation, and controller modulations.
+- **Knob Drawing Buffer Reuse & Zero Allocation Churn:** Optimized `Knob::drawKnob()` to reuse existing `QImage` backing buffer (`m_cache`) across frames rather than allocating a heap-backed `QImage` on every single repaint.
+- **Smooth 60 FPS Knob Motion:** Cleaned obsolete modulo-1024 audio frame skips in `FloatModelEditorBase::friendlyUpdate()`, ensuring silky-smooth 60 FPS knob animation synchronized with display refresh rates without skipping or jumping.
+- **Dedicated Isolated Deployment Pipeline (`deploy-v7.ps1`):** Automated deployment into versioned destination folder (`LMMS-Orion-v7`) to prevent Windows OS file lock conflicts (`EBUSY` / `UnauthorizedAccessException`) with existing running instances.
 
 ### Planned & In-Progress
-- **GUI Modulation Stutter & Frame Rate Throttling:** Investigation and resolution of Qt GUI event-loop saturation caused by rapid parameter modulations (LFO, controllers, knobs, meters) to ensure 60 FPS smooth rendering regardless of modulation count.
 - **AVX2 SIMD Mixing & Dynamic Polyphony:** High-performance real-time mixing pipeline with AVX2 SIMD vectorization, runtime CPUID detection, and SSE fallback.
 - **Voice Stealing Engine:** Intelligent audible voice-stealing preventing release freezes and CPU overload on high-polyphony tracks.
-- **Dedicated Isolated Deployment Pipeline (`deploy-v7.ps1`):** Prevention of Windows OS file locks (`EBUSY` / `UnauthorizedAccessException`) by automated deployment into versioned, isolated destination folders (`LMMS-Orion-v7`).
 
 ---
 

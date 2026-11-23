@@ -389,7 +389,15 @@ void Knob::drawKnob( QPainter * _p )
 		return;
 	}
 
-	m_cache = QImage( size(), QImage::Format_ARGB32 );
+	if( size().isEmpty() )
+	{
+		return;
+	}
+
+	if( m_cache.size() != size() || m_cache.format() != QImage::Format_ARGB32 )
+	{
+		m_cache = QImage( size(), QImage::Format_ARGB32 );
+	}
 	m_cache.fill( qRgba( 0, 0, 0, 0 ) );
 
 	QPainter p( &m_cache );

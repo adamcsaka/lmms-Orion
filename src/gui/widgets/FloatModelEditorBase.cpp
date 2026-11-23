@@ -526,13 +526,6 @@ void FloatModelEditorBase::friendlyUpdate()
 {
 	if (model() == nullptr) { return; }
 
-	// If the controller changes constantly, only repaint every 1024th frame
-	if (model()->useControllerValue()
-		&& model()->controllerConnection()
-		&& model()->controllerConnection()->getController()->frequentUpdates()
-		&& Controller::runningFrames() % (256 * 4) != 0)
-	{ return; }
-
 	// If this float model is currently controlling dynamic floating text...
 	if (floatingTextType() == FloatingTextType::Dynamic)
 	{

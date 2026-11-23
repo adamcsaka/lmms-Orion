@@ -26,6 +26,8 @@
 #ifndef LMMS_CONTROLLER_H
 #define LMMS_CONTROLLER_H
 
+#include <atomic>
+
 #include "lmms_export.h"
 #include "Engine.h"
 #include "Model.h"
@@ -129,6 +131,11 @@ public:
 
 	static void triggerFrameCounter();
 	static void resetFrameCounter();
+	static void updateGuiControllers();
+	static void requestGuiUpdate()
+	{
+		s_guiUpdateNeeded.store(true, std::memory_order_release);
+	}
 
 	//Accepts a ControllerConnection * as it may be used in the future.
 	void addConnection( ControllerConnection * );
@@ -169,6 +176,7 @@ protected:
 	static ControllerVector s_controllers;
 
 	static long s_periods;
+	static std::atomic<bool> s_guiUpdateNeeded;
 
 
 signals:

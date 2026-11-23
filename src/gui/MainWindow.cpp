@@ -37,6 +37,7 @@
 
 #include "AboutDialog.h"
 #include "AutomationEditor.h"
+#include "Controller.h"
 #include "ControllerRackView.h"
 #include "DeprecationHelper.h"
 #include "embed.h"
@@ -1366,6 +1367,7 @@ void MainWindow::keyReleaseEvent( QKeyEvent * _ke )
 
 void MainWindow::timerEvent( QTimerEvent * _te)
 {
+	Controller::updateGuiControllers();
 	emit periodicUpdate();
 }
 

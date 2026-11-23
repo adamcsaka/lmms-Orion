@@ -41,6 +41,7 @@ namespace lmms
 
 long Controller::s_periods = 0;
 std::vector<Controller*> Controller::s_controllers;
+std::atomic<bool> Controller::s_guiUpdateNeeded(false);
 
 
 
@@ -156,17 +157,23 @@ float Controller::runningTime()
 
 void Controller::triggerFrameCounter()
 {
-	for (Controller * controller : s_controllers)
+	s_periods++;
+	s_guiUpdateNeeded.store(true, std::memory_order_release);
+}
+
+
+
+void Controller::updateGuiControllers()
+{
+	if (!s_guiUpdateNeeded.exchange(false, std::memory_order_acq_rel))
 	{
-		// This signal is for updating values for both stubborn knobs and for
-		// painting.  If we ever get all the widgets to use or at least check
-		// currentValue() then we can throttle the signal and only use it for
-		// GUI.
-		emit controller->valueChanged();
+		return;
 	}
 
-	s_periods ++;
-	//emit s_signaler.triggerValueChanged();
+	for (Controller * controller : s_controllers)
+	{
+		emit controller->valueChanged();
+	}
 }
 
 
@@ -178,6 +185,7 @@ void Controller::resetFrameCounter()
 		controller->m_bufferLastUpdated = 0;
 	}
 	s_periods = 0;
+	s_guiUpdateNeeded.store(true, std::memory_order_release);
 }
 
 
