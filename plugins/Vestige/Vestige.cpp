@@ -451,13 +451,7 @@ void VestigeInstrument::closePlugin( void )
 
 	if( m_subWindow != nullptr )
 	{
-		m_subWindow->setAttribute( Qt::WA_DeleteOnClose );
-		m_subWindow->close();
-
-		if( m_subWindow != nullptr )
-		{
-			delete m_subWindow;
-		}
+		delete m_subWindow;
 		m_subWindow = nullptr;
 	}
 
@@ -1099,11 +1093,7 @@ ManageVestigeInstrumentView::~ManageVestigeInstrumentView()
 	}
 
 	if ( m_vi->m_subWindow != nullptr ) {
-		m_vi->m_subWindow->setAttribute(Qt::WA_DeleteOnClose);
-		m_vi->m_subWindow->close();
-
-		if ( m_vi->m_subWindow != nullptr )
-			delete m_vi->m_subWindow;
+		delete m_vi->m_subWindow;
 		m_vi->m_subWindow = nullptr;
 	}
 
