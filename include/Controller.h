@@ -124,7 +124,7 @@ public:
 
 	static long runningPeriods()
 	{
-		return s_periods;
+		return s_periods.load(std::memory_order_relaxed);
 	}
 	static unsigned int runningFrames();
 	static float runningTime();
@@ -175,7 +175,7 @@ protected:
 
 	static ControllerVector s_controllers;
 
-	static long s_periods;
+	static std::atomic<long> s_periods;
 	static std::atomic<bool> s_guiUpdateNeeded;
 
 

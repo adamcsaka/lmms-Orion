@@ -26,6 +26,7 @@
 #include <QtTest>
 #include "AutomatableModel.h"
 #include "ComboBoxModel.h"
+#include "Controller.h"
 #include "Engine.h"
 
 class AutomatableModelTest : public QObject
@@ -115,6 +116,44 @@ private slots: // tests
 		QVERIFY(m2.value() == m3.value());
 		QVERIFY(!m3.value());
 		QVERIFY(m1.countLinks() == 2);
+	}
+
+	void ControllerGuiThrottlingTest()
+	{
+		using namespace lmms;
+
+		int changeCount = 0;
+		auto* controller = Controller::create(Controller::ControllerType::Lfo, nullptr);
+		QVERIFY(controller != nullptr);
+
+		QObject::connect(controller, &Controller::valueChanged, [&changeCount]() {
+			++changeCount;
+		});
+
+		// 1. Simulating real-time audio thread: triggerFrameCounter() must NOT emit valueChanged() synchronously
+		QCOMPARE(changeCount, 0);
+		Controller::triggerFrameCounter();
+		QCOMPARE(changeCount, 0); // Decoupled: zero cross-thread signal emission on audio thread
+
+		// 2. Simulating GUI thread 60 FPS update timer: updateGuiControllers() dispatches queued update
+		Controller::updateGuiControllers();
+		QCOMPARE(changeCount, 1);
+
+		// 3. Repeated call to updateGuiControllers() without new frames: does not emit redundantly
+		Controller::updateGuiControllers();
+		QCOMPARE(changeCount, 1);
+
+		// 4. Manual requestGuiUpdate(): triggers update on next GUI tick even if audio engine hasn't triggered
+		Controller::requestGuiUpdate();
+		Controller::updateGuiControllers();
+		QCOMPARE(changeCount, 2);
+
+		// 5. Clean up controller
+		delete controller;
+		// After deletion, calling updateGuiControllers() should not crash or emit to destroyed controller
+		Controller::requestGuiUpdate();
+		Controller::updateGuiControllers();
+		QCOMPARE(changeCount, 2);
 	}
 };
 

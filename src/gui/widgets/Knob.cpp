@@ -379,18 +379,18 @@ bool Knob::updateAngle()
 
 void Knob::drawKnob( QPainter * _p )
 {
+	if( size().isEmpty() )
+	{
+		return;
+	}
+
 	bool enabled = this->isEnabled();
 	QColor currentArcColor = enabled ? m_arcActiveColor : m_arcInactiveColor;
 	QColor currentLineColor = enabled ? m_lineActiveColor : m_lineInactiveColor;
 
-	if( updateAngle() == false && !m_cache.isNull() )
+	if( updateAngle() == false && !m_cache.isNull() && m_cache.size() == size() )
 	{
 		_p->drawImage( 0, 0, m_cache );
-		return;
-	}
-
-	if( size().isEmpty() )
-	{
 		return;
 	}
 

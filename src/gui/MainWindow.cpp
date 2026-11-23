@@ -1367,8 +1367,15 @@ void MainWindow::keyReleaseEvent( QKeyEvent * _ke )
 
 void MainWindow::timerEvent( QTimerEvent * _te)
 {
-	Controller::updateGuiControllers();
-	emit periodicUpdate();
+	if( _te->timerId() == m_updateTimer.timerId() )
+	{
+		Controller::updateGuiControllers();
+		emit periodicUpdate();
+	}
+	else
+	{
+		QMainWindow::timerEvent( _te );
+	}
 }
 
 

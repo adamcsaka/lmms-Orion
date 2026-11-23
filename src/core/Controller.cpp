@@ -39,7 +39,7 @@ namespace lmms
 {
 
 
-long Controller::s_periods = 0;
+std::atomic<long> Controller::s_periods(0);
 std::vector<Controller*> Controller::s_controllers;
 std::atomic<bool> Controller::s_guiUpdateNeeded(false);
 
@@ -114,7 +114,7 @@ float Controller::currentValue( int _offset )
 
 float Controller::value( int offset )
 {
-	if( m_bufferLastUpdated != s_periods )
+	if( m_bufferLastUpdated != s_periods.load(std::memory_order_relaxed) )
 	{
 		updateValueBuffer();
 	}
@@ -124,7 +124,7 @@ float Controller::value( int offset )
 
 ValueBuffer * Controller::valueBuffer()
 {
-	if( m_bufferLastUpdated != s_periods )
+	if( m_bufferLastUpdated != s_periods.load(std::memory_order_relaxed) )
 	{
 		updateValueBuffer();
 	}
@@ -135,14 +135,14 @@ ValueBuffer * Controller::valueBuffer()
 void Controller::updateValueBuffer()
 {
 	m_valueBuffer.fill(0.5f);
-	m_bufferLastUpdated = s_periods;
+	m_bufferLastUpdated = s_periods.load(std::memory_order_relaxed);
 }
 
 
 // Get position in frames
 unsigned int Controller::runningFrames()
 {
-	return s_periods * Engine::audioEngine()->framesPerPeriod();
+	return s_periods.load(std::memory_order_relaxed) * Engine::audioEngine()->framesPerPeriod();
 }
 
 
@@ -157,7 +157,7 @@ float Controller::runningTime()
 
 void Controller::triggerFrameCounter()
 {
-	s_periods++;
+	s_periods.fetch_add(1, std::memory_order_relaxed);
 	s_guiUpdateNeeded.store(true, std::memory_order_release);
 }
 
@@ -170,9 +170,13 @@ void Controller::updateGuiControllers()
 		return;
 	}
 
-	for (Controller * controller : s_controllers)
+	const auto controllers = s_controllers;
+	for (Controller * controller : controllers)
 	{
-		emit controller->valueChanged();
+		if (controller && std::find(s_controllers.begin(), s_controllers.end(), controller) != s_controllers.end())
+		{
+			emit controller->valueChanged();
+		}
 	}
 }
 
@@ -182,9 +186,12 @@ void Controller::resetFrameCounter()
 {
 	for (Controller * controller : s_controllers)
 	{
-		controller->m_bufferLastUpdated = 0;
+		if (controller)
+		{
+			controller->m_bufferLastUpdated = 0;
+		}
 	}
-	s_periods = 0;
+	s_periods.store(0, std::memory_order_relaxed);
 	s_guiUpdateNeeded.store(true, std::memory_order_release);
 }
 

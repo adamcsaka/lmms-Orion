@@ -69,6 +69,10 @@ LfoController::LfoController( Model * _parent ) :
 	connect(Engine::getSong(), &Song::playbackPositionJumped,
 			this, &LfoController::updatePhase);
 
+	connect( &m_baseModel, &Model::dataChanged, []{ Controller::requestGuiUpdate(); } );
+	connect( &m_amountModel, &Model::dataChanged, []{ Controller::requestGuiUpdate(); } );
+	connect( &m_phaseModel, &Model::dataChanged, []{ Controller::requestGuiUpdate(); } );
+
 	updateDuration();
 }
 

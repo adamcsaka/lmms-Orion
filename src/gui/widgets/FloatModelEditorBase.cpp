@@ -524,7 +524,7 @@ void FloatModelEditorBase::enterValue()
 
 void FloatModelEditorBase::friendlyUpdate()
 {
-	if (model() == nullptr) { return; }
+	if (model() == nullptr || !isVisible()) { return; }
 
 	// If this float model is currently controlling dynamic floating text...
 	if (floatingTextType() == FloatingTextType::Dynamic)
