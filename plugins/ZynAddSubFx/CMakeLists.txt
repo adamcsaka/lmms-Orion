@@ -4,6 +4,19 @@ endif()
 
 INCLUDE(BuildPlugin)
 
+# Auto-patch SVFilter.cpp against out-of-bounds filter type crashes (0xc0000005)
+set(SVFILTER_FILE "${CMAKE_CURRENT_SOURCE_DIR}/zynaddsubfx/src/DSP/SVFilter.cpp")
+if(EXISTS "${SVFILTER_FILE}")
+	file(READ "${SVFILTER_FILE}" SVFILTER_SRC)
+	if(NOT SVFILTER_SRC MATCHES "out = &x.low")
+		string(REPLACE "type(Ftype)," "type(Ftype > 3 ? 0 : Ftype)," SVFILTER_SRC "${SVFILTER_SRC}")
+		string(REPLACE "type = type_;" "type = (type_ < 0 || type_ > 3) ? 0 : type_;" SVFILTER_SRC "${SVFILTER_SRC}")
+		string(REPLACE "break;\n    }" "out = &x.low;\n            break;\n    }" SVFILTER_SRC "${SVFILTER_SRC}")
+		string(REPLACE "break;\r\n    }" "out = &x.low;\r\n            break;\r\n    }" SVFILTER_SRC "${SVFILTER_SRC}")
+		file(WRITE "${SVFILTER_FILE}" "${SVFILTER_SRC}")
+	endif()
+endif()
+
 find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
 

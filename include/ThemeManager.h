@@ -45,6 +45,7 @@ struct LMMS_EXPORT ThemePreset
 	QString barLineColor;       // Measure/bar lines (e.g. #e5a93c)
 	QString noteColor;          // Piano roll note color
 	QString selectedColor;      // Selection highlight
+	QString borderColor;        // Window frames and borders
 	QString backgroundPic;      // Optional wallpaper path
 	bool isProjectTheme = false;// Whether this is custom to the current project
 };
@@ -63,6 +64,7 @@ public:
 	void applyThemeByName(const QString& name);
 	void setAccentColor(const QColor& color);
 	void setBaseColor(const QColor& color);
+	void setBorderColor(const QColor& color);
 	void setWindowColor(const QColor& color);
 	void setBackgroundPicture(const QString& path);
 	void clearBackgroundPicture();

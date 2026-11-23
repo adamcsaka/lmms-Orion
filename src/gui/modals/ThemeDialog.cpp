@@ -78,12 +78,19 @@ ThemeDialog::ThemeDialog(QWidget* parent) :
 	connect(m_baseSwatchBtn, &QPushButton::clicked, this, &ThemeDialog::onPickBaseColor);
 	colorLayout->addWidget(m_baseSwatchBtn, 1, 1);
 
-	colorLayout->addWidget(new QLabel(tr("Workspace Background Color:"), colorGroup), 2, 0);
+	colorLayout->addWidget(new QLabel(tr("Window Borders & Frames Color:"), colorGroup), 2, 0);
+	m_borderSwatchBtn = new QPushButton(colorGroup);
+	m_borderSwatchBtn->setMinimumHeight(28);
+	m_borderSwatchBtn->setCursor(Qt::PointingHandCursor);
+	connect(m_borderSwatchBtn, &QPushButton::clicked, this, &ThemeDialog::onPickBorderColor);
+	colorLayout->addWidget(m_borderSwatchBtn, 2, 1);
+
+	colorLayout->addWidget(new QLabel(tr("Workspace Background Color:"), colorGroup), 3, 0);
 	m_windowSwatchBtn = new QPushButton(colorGroup);
 	m_windowSwatchBtn->setMinimumHeight(28);
 	m_windowSwatchBtn->setCursor(Qt::PointingHandCursor);
 	connect(m_windowSwatchBtn, &QPushButton::clicked, this, &ThemeDialog::onPickWindowColor);
-	colorLayout->addWidget(m_windowSwatchBtn, 2, 1);
+	colorLayout->addWidget(m_windowSwatchBtn, 3, 1);
 
 	mainLayout->addWidget(colorGroup);
 
@@ -209,6 +216,7 @@ void ThemeDialog::updateSwatches()
 
 	formatSwatch(m_accentSwatchBtn, theme.accentColor);
 	formatSwatch(m_baseSwatchBtn, theme.baseColor);
+	formatSwatch(m_borderSwatchBtn, theme.borderColor.isEmpty() ? theme.accentColor : theme.borderColor);
 	formatSwatch(m_windowSwatchBtn, theme.windowColor);
 
 	m_wallpaperPathEdit->setText(theme.backgroundPic);
@@ -242,6 +250,19 @@ void ThemeDialog::onPickBaseColor()
 	if (dlg.exec() == QDialog::Accepted)
 	{
 		ThemeManager::inst()->setBaseColor(dlg.selectedColor());
+		updateSwatches();
+	}
+}
+
+void ThemeDialog::onPickBorderColor()
+{
+	QString currentHex = ThemeManager::inst()->currentTheme().borderColor;
+	if (currentHex.isEmpty()) currentHex = ThemeManager::inst()->currentTheme().accentColor;
+	QColor current(currentHex);
+	ColorChooser dlg(current, this);
+	if (dlg.exec() == QDialog::Accepted)
+	{
+		ThemeManager::inst()->setBorderColor(dlg.selectedColor());
 		updateSwatches();
 	}
 }
