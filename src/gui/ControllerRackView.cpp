@@ -31,10 +31,20 @@
 #include <QScrollArea>
 #include <QMessageBox>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QMenu>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QTextStream>
+#include <QDesktopServices>
+#include <QUrl>
 
+#include "ConfigManager.h"
 #include "ControllerView.h"
 #include "DeprecationHelper.h"
 #include "embed.h"
+#include "FileDialog.h"
 #include "GuiApplication.h"
 #include "LfoController.h"
 #include "MainWindow.h"
@@ -64,11 +74,21 @@ ControllerRackView::ControllerRackView()
 	m_scrollArea->setWidget( scrollAreaWidget );
 	m_scrollArea->setWidgetResizable( true );
 
-	m_addButton = new QPushButton( this );
-	m_addButton->setText( tr( "Add" ) );
+	m_addButton = new QPushButton( tr( "+ Add" ), this );
+	m_savePresetButton = new QPushButton( tr( "Save Preset" ), this );
+	m_loadPresetButton = new QPushButton( tr( "Load Preset" ), this );
+	m_presetsMenuButton = new QPushButton( tr( "Presets..." ), this );
 
-	connect( m_addButton, SIGNAL(clicked()),
-			this, SLOT(addController()));
+	auto btnLayout = new QHBoxLayout();
+	btnLayout->addWidget( m_addButton );
+	btnLayout->addWidget( m_savePresetButton );
+	btnLayout->addWidget( m_loadPresetButton );
+	btnLayout->addWidget( m_presetsMenuButton );
+
+	connect( m_addButton, &QPushButton::clicked, this, qOverload<>(&ControllerRackView::addController) );
+	connect( m_savePresetButton, &QPushButton::clicked, this, &ControllerRackView::savePresets );
+	connect( m_loadPresetButton, &QPushButton::clicked, this, &ControllerRackView::loadPresets );
+	connect( m_presetsMenuButton, &QPushButton::clicked, this, &ControllerRackView::showPresetsMenu );
 
 	Song * song = Engine::getSong();
 	connect(song, &Song::controllerAdded, this, qOverload<Controller*>(&ControllerRackView::addController));
@@ -76,12 +96,12 @@ ControllerRackView::ControllerRackView()
 
 	auto layout = new QVBoxLayout();
 	layout->addWidget( m_scrollArea );
-	layout->addWidget( m_addButton );
+	layout->addLayout( btnLayout );
 	this->setLayout( layout );
 
 	SubWindow* subWin = getGUI()->mainWindow()->addWindowedWidget(this);
 
-	setFixedWidth(350);
+	setFixedWidth(380);
 	setMinimumHeight(200);
 
 	// No maximize button
@@ -227,6 +247,150 @@ void ControllerRackView::addController()
 	// fix bug which always made ControllerRackView loose focus when adding
 	// new controller
 	setFocus();
+}
+
+void ControllerRackView::savePresets()
+{
+	Song * song = Engine::getSong();
+	if (song->controllers().empty())
+	{
+		QMessageBox::information(this, tr("Save Controller Preset"),
+			tr("There are no controllers in the rack to save."));
+		return;
+	}
+
+	const QString presetDir = QDir(ConfigManager::inst()->userPresetsDir()).filePath("LFO Presets");
+	QDir().mkpath(presetDir);
+
+	QString filter = tr("LMMS Controller Preset (*.xpf *.xml);;All files (*.*)");
+	QString fileName = FileDialog::getSaveFileName(this, tr("Save Controller Preset"), presetDir, filter);
+	if (fileName.isEmpty()) { return; }
+	if (!fileName.endsWith(".xpf", Qt::CaseInsensitive) && !fileName.endsWith(".xml", Qt::CaseInsensitive))
+	{
+		fileName += ".xpf";
+	}
+
+	QDomDocument doc("lmms-controller-preset");
+	QDomElement root = doc.createElement("lmms-controller-preset");
+	root.setAttribute("version", "1.0");
+	doc.appendChild(root);
+
+	song->saveControllerStates(doc, root);
+
+	QFile file(fileName);
+	if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
+	{
+		QMessageBox::warning(this, tr("Save Error"), tr("Could not write to file %1").arg(fileName));
+		return;
+	}
+
+	QTextStream stream(&file);
+	doc.save(stream, 2);
+	file.close();
+}
+
+void ControllerRackView::loadPresetFile(const QString & fileName)
+{
+	QFile file(fileName);
+	if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+	{
+		QMessageBox::warning(this, tr("Load Error"), tr("Could not open file %1").arg(fileName));
+		return;
+	}
+
+	QDomDocument doc;
+	QString errorMsg;
+	int errorLine = 0, errorCol = 0;
+	if (!doc.setContent(&file, &errorMsg, &errorLine, &errorCol))
+	{
+		file.close();
+		QMessageBox::warning(this, tr("Load Error"),
+			tr("Failed to parse XML preset: %1 (line %2)").arg(errorMsg).arg(errorLine));
+		return;
+	}
+	file.close();
+
+	QDomElement root = doc.documentElement();
+	QDomElement controllersNode = root.firstChildElement("controllers");
+	if (controllersNode.isNull())
+	{
+		if (root.nodeName() == "controllers")
+		{
+			controllersNode = root;
+		}
+	}
+
+	if (controllersNode.isNull())
+	{
+		QMessageBox::warning(this, tr("Load Error"), tr("No controller data found in preset file."));
+		return;
+	}
+
+	Song * song = Engine::getSong();
+
+	if (!song->controllers().empty())
+	{
+		QMessageBox::StandardButton reply = QMessageBox::question(this, tr("Load Preset"),
+			tr("Replace existing controllers in rack? Select 'No' to append them instead."),
+			QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel, QMessageBox::No);
+
+		if (reply == QMessageBox::Cancel) { return; }
+		if (reply == QMessageBox::Yes)
+		{
+			song->removeAllControllers();
+		}
+	}
+
+	song->restoreControllerStates(controllersNode);
+	song->setModified();
+}
+
+void ControllerRackView::loadPresets()
+{
+	const QString presetDir = QDir(ConfigManager::inst()->userPresetsDir()).filePath("LFO Presets");
+	QDir().mkpath(presetDir);
+
+	QString filter = tr("LMMS Controller Preset (*.xpf *.xml);;All files (*.*)");
+	QString fileName = FileDialog::getOpenFileName(this, tr("Load Controller Preset"), presetDir, filter);
+	if (fileName.isEmpty()) { return; }
+
+	loadPresetFile(fileName);
+}
+
+void ControllerRackView::showPresetsMenu()
+{
+	const QString presetDir = QDir(ConfigManager::inst()->userPresetsDir()).filePath("LFO Presets");
+	QDir().mkpath(presetDir);
+
+	QMenu menu(this);
+	QDir dir(presetDir);
+	QStringList filters;
+	filters << "*.xpf" << "*.xml";
+	QFileInfoList files = dir.entryInfoList(filters, QDir::Files, QDir::Name);
+
+	if (files.isEmpty())
+	{
+		QAction * emptyAction = menu.addAction(tr("No presets found in 'LFO Presets'"));
+		emptyAction->setEnabled(false);
+	}
+	else
+	{
+		for (const QFileInfo & fi : files)
+		{
+			QAction * act = menu.addAction(fi.completeBaseName());
+			connect(act, &QAction::triggered, this, [this, path = fi.absoluteFilePath()] {
+				loadPresetFile(path);
+			});
+		}
+	}
+
+	menu.addSeparator();
+	QAction * openFolderAction = menu.addAction(tr("Open Presets Folder..."));
+	connect(openFolderAction, &QAction::triggered, this, [presetDir] {
+		QDesktopServices::openUrl(QUrl::fromLocalFile(presetDir));
+	});
+
+	menu.exec(m_presetsMenuButton->mapToGlobal(QPoint(0, m_presetsMenuButton->height())));
 }
 
 } // namespace lmms::gui

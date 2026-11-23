@@ -344,6 +344,11 @@ InstrumentFunctionArpeggio::InstrumentFunctionArpeggio( Model * _parent ) :
 
 void InstrumentFunctionArpeggio::processNote( NotePlayHandle * _n )
 {
+	if (!_n || !_n->instrumentTrack())
+	{
+		return;
+	}
+
 	const int base_note_key = _n->key();
 	if( _n->origin() == NotePlayHandle::Origin::Arpeggio ||
 		_n->origin() == NotePlayHandle::Origin::NoteStacking ||
@@ -361,14 +366,12 @@ void InstrumentFunctionArpeggio::processNote( NotePlayHandle * _n )
 
 	ConstNotePlayHandleList cnphv = NotePlayHandle::nphsOfInstrumentTrack(_n->instrumentTrack());
 
-	if(arpMode != ArpMode::Free && cnphv.size() == 0 )
+	if(cnphv.isEmpty())
 	{
 		// maybe we're playing only a preset-preview-note?
 		cnphv = PresetPreviewPlayHandle::nphsOfInstrumentTrack( _n->instrumentTrack() );
-		if( cnphv.size() == 0 )
+		if( cnphv.isEmpty() )
 		{
-			// still nothing found here, so lets return
-			//return;
 			cnphv.push_back( _n );
 		}
 	}
@@ -378,12 +381,23 @@ void InstrumentFunctionArpeggio::processNote( NotePlayHandle * _n )
 	if (arpMode == ArpMode::Sort && _n != cnphv.first()) { return; }
 
 	const InstrumentFunctionNoteStacking::ChordTable & chord_table = InstrumentFunctionNoteStacking::ChordTable::getInstance();
+	if (selected_arp < 0 || selected_arp >= static_cast<int>(chord_table.chords().size()))
+	{
+		return;
+	}
+
 	const int cur_chord_size = chord_table.chords()[selected_arp].size();
-	const int total_chord_size = cur_chord_size * cnphv.size();
+	if (cur_chord_size <= 0)
+	{
+		return;
+	}
+
+	const int repeats = std::max(1, static_cast<int>(m_arpRepeatsModel.value()));
+	const int total_chord_size = std::max(1, cur_chord_size * static_cast<int>(cnphv.size()));
 	// how many notes are in a single chord (multiplied by range)
-	const int singleNoteRange = static_cast<int>(cur_chord_size * m_arpRangeModel.value() * m_arpRepeatsModel.value());
+	const int singleNoteRange = std::max(1, static_cast<int>(cur_chord_size * std::max(1.0f, m_arpRangeModel.value()) * repeats));
 	// how many notes are in the final chord
-	const int range = arpMode == ArpMode::Sort ? singleNoteRange * cnphv.size() : singleNoteRange;
+	const int range = std::max(1, arpMode == ArpMode::Sort ? singleNoteRange * static_cast<int>(cnphv.size()) : singleNoteRange);
 
 	if (arpMode == ArpMode::Sort)
 	{
@@ -395,16 +409,21 @@ void InstrumentFunctionArpeggio::processNote( NotePlayHandle * _n )
 
 	// number of frames that every note should be played
 	const auto arp_frames = (f_cnt_t)(m_arpTimeModel.value() / 1000.0f * Engine::audioEngine()->outputSampleRate());
+	if (arp_frames <= 0)
+	{
+		return;
+	}
+
 	const auto gated_frames = (f_cnt_t)(m_arpGateModel.value() * arp_frames / 100.0f);
 
 	// used for calculating remaining frames for arp-note, we have to add
 	// arp_frames-1, otherwise the first arp-note will not be setup
 	// correctly... -> arp_frames frames silence at the start of every note!
-	int cur_frame = (arpMode != ArpMode::Free ?
+	int cur_frame = (arpMode != ArpMode::Free && !cnphv.isEmpty() ?
 						cnphv.first()->totalFramesPlayed() :
 						_n->actualPhysicalFrames()) + arp_frames - 1;
 	// used for loop
-	f_cnt_t frames_processed = arpMode != ArpMode::Free ? cnphv.first()->noteOffset() : _n->noteOffset();
+	f_cnt_t frames_processed = (arpMode != ArpMode::Free && !cnphv.isEmpty()) ? cnphv.first()->noteOffset() : _n->noteOffset();
 
 	while( frames_processed < Engine::audioEngine()->framesPerPeriod() )
 	{
@@ -445,16 +464,16 @@ void InstrumentFunctionArpeggio::processNote( NotePlayHandle * _n )
 		}
 		else if ((dir == ArpDirection::UpAndDown || dir == ArpDirection::DownAndUp) && range > 1)
 		{
-			// imagine, we had to play the arp once up and then
-			// once down -> makes 2 * range possible notes...
-			// because we don't play the lower and upper notes
-			// twice, we have to subtract 2
-			cur_arp_idx = (cur_frame / arp_frames) % (range * 2 - (2 * static_cast<int>(m_arpRepeatsModel.value())));
-			// if greater than range, we have to play down...
-			// looks like the code for arp_dir==DOWN... :)
+			int cycleLength = range * 2 - (2 * repeats);
+			if (cycleLength <= 0)
+			{
+				cycleLength = range;
+			}
+			cur_arp_idx = (cur_frame / arp_frames) % cycleLength;
 			if (cur_arp_idx >= range)
 			{
-				cur_arp_idx = range - cur_arp_idx % (range - 1) - static_cast<int>(m_arpRepeatsModel.value());
+				const int downDiv = std::max(1, range - 1);
+				cur_arp_idx = range - (cur_arp_idx % downDiv) - repeats;
 			}
 		}
 		else if( dir == ArpDirection::Random )
@@ -464,35 +483,38 @@ void InstrumentFunctionArpeggio::processNote( NotePlayHandle * _n )
 		}
 
 		// Divide cur_arp_idx with wanted repeats. The repeat feature will not affect random notes.
-		cur_arp_idx = static_cast<int>(cur_arp_idx / m_arpRepeatsModel.value());
+		cur_arp_idx = static_cast<int>(std::abs(cur_arp_idx) / repeats);
 
 		// Cycle notes
+		const int cycleRange = std::max(1, static_cast<int>(range / repeats));
 		if( m_arpCycleModel.value() && dir != ArpDirection::Random )
 		{
-			cur_arp_idx *= m_arpCycleModel.value() + 1;
-			cur_arp_idx %= static_cast<int>(range / m_arpRepeatsModel.value());
+			cur_arp_idx *= static_cast<int>(m_arpCycleModel.value()) + 1;
+			cur_arp_idx %= cycleRange;
 		}
 
 		// If ArpDirection::Down or ArpDirection::DownAndUp, invert the final range.
 		if (dir == ArpDirection::Down || dir == ArpDirection::DownAndUp)
 		{
-			cur_arp_idx = static_cast<int>(range / m_arpRepeatsModel.value()) - cur_arp_idx - 1;
+			cur_arp_idx = std::max(0, cycleRange - cur_arp_idx - 1);
 		}
 
 		// now calculate final key for our arp-note
 		int sub_note_key = 0;
 		if (arpMode != ArpMode::Sort)
 		{
+			const int chordIdx = std::clamp(static_cast<int>(std::abs(cur_arp_idx) % cur_chord_size), 0, cur_chord_size - 1);
 			sub_note_key = base_note_key + (cur_arp_idx / cur_chord_size) *
-							KeysPerOctave + chord_table.chords()[selected_arp][cur_arp_idx % cur_chord_size];
+							KeysPerOctave + chord_table.chords()[selected_arp][chordIdx];
 		}
 		else
 		{
-			const auto octaveDiv = std::div(cur_arp_idx, static_cast<int>(total_chord_size));
+			const auto octaveDiv = std::div(cur_arp_idx, total_chord_size);
 			const int octave = octaveDiv.quot;
-			const auto arpDiv = std::div(octaveDiv.rem, static_cast<int>(cnphv.size()));
-			const int arpIndex = arpDiv.rem;
-			const int chordIndex = arpDiv.quot;
+			const int numCnphv = std::max(1, static_cast<int>(cnphv.size()));
+			const auto arpDiv = std::div(std::abs(octaveDiv.rem), numCnphv);
+			const int arpIndex = std::clamp(arpDiv.rem, 0, numCnphv - 1);
+			const int chordIndex = std::clamp(arpDiv.quot, 0, cur_chord_size - 1);
 			sub_note_key = cnphv[arpIndex]->key()
 				+ chord_table.chords()[selected_arp][chordIndex]
 				+ octave * KeysPerOctave;

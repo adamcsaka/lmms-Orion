@@ -288,7 +288,7 @@ void AutomationEditor::keyPressEvent(QKeyEvent * ke )
 
 	if (!m_selectedTicks.empty())
 	{
-		int quant = AutomationClip::quantizationTicks();
+		int quant = AutomationClip::quantization();
 		if (quant <= 0) { quant = 16; }
 		if (ke->key() == Qt::Key_Left)
 		{
@@ -1868,6 +1868,179 @@ void AutomationEditor::updatePosition()
 		}
 		m_scrollBack = false;
 	}
+
+	updatePositionLinePos();
+	update();
+}
+
+void AutomationEditor::updatePositionLinePos()
+{
+	if (!m_positionLine) { return; }
+	const int pos = (static_cast<int>(m_timeLine->timeline()->pos()) - m_currentPosition) * m_ppb / TimePos::ticksPerBar();
+	if (validClip() && pos >= 0 && pos <= width() - VALUES_WIDTH)
+	{
+		m_positionLine->show();
+		m_positionLine->move(pos + VALUES_WIDTH - (m_positionLine->width() - 1), TOP_MARGIN);
+	}
+	else
+	{
+		m_positionLine->hide();
+	}
+}
+
+void AutomationEditor::updatePositionLineHeight()
+{
+	if (!m_positionLine) { return; }
+	m_positionLine->setFixedHeight(std::max(10, height() - TOP_MARGIN - SCROLLBAR_SIZE));
+}
+
+void AutomationEditor::updatePositionAccompany()
+{
+	Song * s = Engine::getSong();
+	if (!validClip() || !s->isPlaying())
+	{
+		return;
+	}
+
+	if (s->playMode() == Song::PlayMode::Pattern)
+	{
+		TimePos pos = s->getPlayPos(Song::PlayMode::Pattern);
+		if (m_clip->length() > 0)
+		{
+			pos = pos % m_clip->length();
+		}
+		m_timeLine->timeline()->setTicks(pos, false);
+		updatePositionLinePos();
+		update();
+	}
+	else if (s->playMode() == Song::PlayMode::Song)
+	{
+		TimePos pos = s->getPlayPos(Song::PlayMode::Song);
+		pos -= m_clip->startPosition() + m_clip->startTimeOffset();
+		if ((int)pos >= 0 && pos < m_clip->length())
+		{
+			m_timeLine->timeline()->setTicks(pos, false);
+			updatePositionLinePos();
+			update();
+		}
+	}
+}
+
+bool AutomationEditor::isNodeSelected(int tick) const
+{
+	return std::find(m_selectedTicks.begin(), m_selectedTicks.end(), tick) != m_selectedTicks.end();
+}
+
+void AutomationEditor::selectAllNodes()
+{
+	if (!validClip()) { return; }
+	m_selectedTicks.clear();
+	timeMap & tm = m_clip->getTimeMap();
+	for (auto it = tm.begin(); it != tm.end(); ++it)
+	{
+		m_selectedTicks.push_back(POS(it));
+	}
+	update();
+}
+
+void AutomationEditor::clearNodeSelection()
+{
+	m_selectedTicks.clear();
+	update();
+}
+
+void AutomationEditor::deleteSelectedNodes()
+{
+	if (!validClip() || m_selectedTicks.empty()) { return; }
+	m_clip->addJournalCheckPoint();
+	for (int tick : m_selectedTicks)
+	{
+		m_clip->removeNode(TimePos(tick));
+	}
+	m_selectedTicks.clear();
+	Engine::getSong()->setModified();
+	update();
+}
+
+void AutomationEditor::moveSelectedNodes(int deltaTicks, float deltaLevel)
+{
+	if (!validClip() || m_selectedTicks.empty()) { return; }
+
+	int minTick = std::numeric_limits<int>::max();
+	for (int t : m_selectedTicks) { minTick = std::min(minTick, t); }
+	if (minTick + deltaTicks < 0) { deltaTicks = -minTick; }
+
+	if (deltaTicks == 0 && std::abs(deltaLevel) < 0.0001f) { return; }
+
+	m_clip->addJournalCheckPoint();
+
+	struct NodeData
+	{
+		int oldTick;
+		float inVal;
+		float outVal;
+		float inTan;
+		float outTan;
+		bool lockedTan;
+	};
+	std::vector<NodeData> toMove;
+	timeMap & tm = m_clip->getTimeMap();
+
+	for (int t : m_selectedTicks)
+	{
+		auto it = tm.find(t);
+		if (it != tm.end())
+		{
+			toMove.push_back({t, it.value().getInValue(), it.value().getOutValue(),
+				it.value().getInTangent(), it.value().getOutTangent(), it.value().lockedTangents()});
+		}
+	}
+
+	for (const auto& nd : toMove)
+	{
+		m_clip->removeNode(TimePos(nd.oldTick));
+	}
+
+	m_selectedTicks.clear();
+
+	for (const auto& nd : toMove)
+	{
+		int newTick = std::max(0, nd.oldTick + deltaTicks);
+		float newIn = std::clamp(nd.inVal + deltaLevel, m_minLevel, m_maxLevel);
+		float newOut = std::clamp(nd.outVal + deltaLevel, m_minLevel, m_maxLevel);
+
+		TimePos placedPos = m_clip->putValues(TimePos(newTick), newIn, newOut, false, false);
+		auto placedIt = tm.find(placedPos);
+		if (placedIt != tm.end())
+		{
+			placedIt.value().setInTangent(nd.inTan);
+			placedIt.value().setOutTangent(nd.outTan);
+			placedIt.value().setLockedTangents(nd.lockedTan);
+		}
+		m_selectedTicks.push_back(placedPos.getTicks());
+	}
+
+	Engine::getSong()->setModified();
+	update();
+}
+
+void AutomationEditor::computeSelectedNodes(bool shift)
+{
+	if (!validClip()) { return; }
+	if (!shift) { m_selectedTicks.clear(); }
+	timeMap & tm = m_clip->getTimeMap();
+	for (auto it = tm.begin(); it != tm.end(); ++it)
+	{
+		int x = xCoordOfTick(POS(it));
+		int y = static_cast<int>(yCoordOfLevel(INVAL(it)));
+		if (m_rubberBandRect.contains(x, y))
+		{
+			if (!isNodeSelected(POS(it)))
+			{
+				m_selectedTicks.push_back(POS(it));
+			}
+		}
+	}
 }
 
 
@@ -1880,6 +2053,11 @@ void AutomationEditor::zoomingXChanged()
 	assert( m_ppb > 0 );
 
 	m_timeLine->setPixelsPerBar( m_ppb );
+	if (m_positionLine)
+	{
+		m_positionLine->zoomChange(m_zoomXLevels[m_zoomingXModel.value()]);
+	}
+	updatePositionLinePos();
 	update();
 }
 
@@ -2092,6 +2270,9 @@ AutomationEditorWindow::AutomationEditorWindow() :
 	m_editTanAction->setShortcut(keySequence(Qt::SHIFT, Qt::Key_T));
 	m_editTanAction->setEnabled(false);
 
+	m_selectAction = editModeGroup->addAction(embed::getIconPixmap("edit_select"), tr("Select mode (Shift+S)"));
+	m_selectAction->setShortcut(keySequence(Qt::SHIFT, Qt::Key_S));
+
 	m_flipYAction = new QAction(embed::getIconPixmap("flip_y"), tr("Flip vertically"), this);
 	m_flipXAction = new QAction(embed::getIconPixmap("flip_x"), tr("Flip horizontally"), this);
 
@@ -2101,6 +2282,7 @@ AutomationEditorWindow::AutomationEditorWindow() :
 	editActionsToolBar->addAction(m_eraseAction);
 	editActionsToolBar->addAction(m_drawOutAction);
 	editActionsToolBar->addAction(m_editTanAction);
+	editActionsToolBar->addAction(m_selectAction);
 	editActionsToolBar->addAction(m_flipXAction);
 	editActionsToolBar->addAction(m_flipYAction);
 
