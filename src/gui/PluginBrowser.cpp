@@ -340,7 +340,7 @@ void PluginDescWidget::openInTrackContainer(lmms::TrackContainer* tc, QString va
 	if (!tc) { tc = Engine::getSong(); }
 	auto it = dynamic_cast<InstrumentTrack*>(Track::create(Track::Type::Instrument, tc));
 	auto ilt = new InstrumentLoaderThread(this, it, value);
-	connect(ilt, &QThread::finished, [tc, it]() {
+	connect(ilt, &QThread::finished, this, [tc, it]() {
 		auto findAndOpenWindow = [it](TrackContainerView* tcv) {
 			if (!tcv) { return false; }
 			for (TrackView* tv : tcv->trackViews())
@@ -366,6 +366,7 @@ void PluginDescWidget::openInTrackContainer(lmms::TrackContainer* tc, QString va
 			findAndOpenWindow(getGUI()->songEditor()->m_editor);
 		}
 	});
+	connect(ilt, &QThread::finished, ilt, &QObject::deleteLater);
 	ilt->start();
 }
 

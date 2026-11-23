@@ -399,7 +399,7 @@ void TrackContainerView::dropEvent( QDropEvent * _de )
 	{
 		auto it = dynamic_cast<InstrumentTrack*>(Track::create(Track::Type::Instrument, m_tc));
 		auto ilt = new InstrumentLoaderThread(this, it, value);
-		connect(ilt, &QThread::finished, [this, it]() {
+		connect(ilt, &QThread::finished, this, [this, it]() {
 			for (TrackView* tv : trackViews())
 			{
 				if (tv && tv->getTrack() == it)
@@ -412,6 +412,7 @@ void TrackContainerView::dropEvent( QDropEvent * _de )
 				}
 			}
 		});
+		connect(ilt, &QThread::finished, ilt, &QObject::deleteLater);
 		ilt->start();
 		_de->accept();
 	}

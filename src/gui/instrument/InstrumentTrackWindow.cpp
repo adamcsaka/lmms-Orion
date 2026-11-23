@@ -77,8 +77,8 @@ const int PIANO_HEIGHT = 80;
 
 InstrumentTrackWindow::InstrumentTrackWindow(InstrumentTrackView* _itv)
 	: QWidget()
-	, ModelView(nullptr, this)
-	, m_track(_itv->model())
+	, ModelView(_itv ? _itv->model() : nullptr, this)
+	, m_track(_itv ? _itv->model() : nullptr)
 	, m_itv(_itv)
 	, m_instrumentView(nullptr)
 {
@@ -144,14 +144,14 @@ InstrumentTrackWindow::InstrumentTrackWindow(InstrumentTrackView* _itv)
 	soloMuteLayout->setSpacing(2);
 
 	m_muteBtn = new AutomatableButton(this, tr("Mute"));
-	m_muteBtn->setModel(&m_track->m_mutedModel);
+	m_muteBtn->setModel(m_track ? &m_track->m_mutedModel : nullptr);
 	m_muteBtn->setCheckable(true);
 	m_muteBtn->setObjectName("btn-mute");
 	m_muteBtn->setToolTip(tr("Mute this instrument"));
 	soloMuteLayout->addWidget(m_muteBtn, 0, widgetAlignment);
 
 	m_soloBtn = new AutomatableButton(this, tr("Solo"));
-	m_soloBtn->setModel(&m_track->m_soloModel);
+	m_soloBtn->setModel(m_track ? &m_track->m_soloModel : nullptr);
 	m_soloBtn->setCheckable(true);
 	m_soloBtn->setObjectName("btn-solo");
 	m_soloBtn->setToolTip(tr("Solo this instrument"));
@@ -272,8 +272,8 @@ InstrumentTrackWindow::InstrumentTrackWindow(InstrumentTrackView* _itv)
 	m_instrumentFunctionsView = new QWidget(m_tabWidget);
 	auto instrumentFunctionsLayout = new QVBoxLayout(m_instrumentFunctionsView);
 	instrumentFunctionsLayout->setContentsMargins(5, 5, 5, 5);
-	m_noteStackingView = new InstrumentFunctionNoteStackingView(&m_track->m_noteStacking);
-	m_arpeggioView = new InstrumentFunctionArpeggioView(&m_track->m_arpeggio);
+	m_noteStackingView = new InstrumentFunctionNoteStackingView(m_track ? &m_track->m_noteStacking : nullptr);
+	m_arpeggioView = new InstrumentFunctionArpeggioView(m_track ? &m_track->m_arpeggio : nullptr);
 
 	instrumentFunctionsLayout->addWidget(m_noteStackingView);
 	instrumentFunctionsLayout->addWidget(m_arpeggioView);
@@ -283,7 +283,7 @@ InstrumentTrackWindow::InstrumentTrackWindow(InstrumentTrackView* _itv)
 	m_midiView = new InstrumentMidiIOView(m_tabWidget);
 
 	// FX tab
-	m_effectView = new EffectRackView(m_track->m_audioBusHandle.effects(), m_tabWidget);
+	m_effectView = new EffectRackView(m_track ? m_track->m_audioBusHandle.effects() : nullptr, m_tabWidget);
 
 	// Tuning tab
 	m_tuningView = new InstrumentTuningView(m_track, m_tabWidget);
@@ -309,7 +309,10 @@ InstrumentTrackWindow::InstrumentTrackWindow(InstrumentTrackView* _itv)
 	// QLayout::addWidget() uses QWidgetItemV2 with size hint caching
 	vlayout->insertItem(1, new QWidgetItem(m_tabWidget));
 	vlayout->addWidget(m_pianoView);
-	setModel(_itv->model());
+	if (_itv && _itv->model())
+	{
+		setModel(_itv->model());
+	}
 
 	QMdiSubWindow* subWin = getGUI()->mainWindow()->addWindowedWidget(this);
 
@@ -350,11 +353,16 @@ void InstrumentTrackWindow::setInstrumentTrackView(InstrumentTrackView* view)
 
 	m_itv = view;
 	m_mixerChannelNumber->setTrackView(m_itv);
+	setModel(view ? view->model() : nullptr);
 }
 
 void InstrumentTrackWindow::modelChanged()
 {
 	m_track = castModel<InstrumentTrack>();
+	if (!m_track)
+	{
+		return;
+	}
 
 	m_nameLineEdit->setText(m_track->name());
 
@@ -448,6 +456,7 @@ void InstrumentTrackWindow::saveSettingsBtnClicked()
 
 void InstrumentTrackWindow::updateName()
 {
+	if (!m_track) { return; }
 	setWindowTitle(m_track->name().length() > 25 ? (m_track->name().left(24) + "...") : m_track->name());
 
 	if (m_nameLineEdit->text() != m_track->name()) { m_nameLineEdit->setText(m_track->name()); }
@@ -456,7 +465,8 @@ void InstrumentTrackWindow::updateName()
 void InstrumentTrackWindow::updateInstrumentView()
 {
 	delete m_instrumentView;
-	if (m_track->m_instrument != nullptr)
+	m_instrumentView = nullptr;
+	if (m_track && m_track->m_instrument != nullptr)
 	{
 		m_instrumentView = m_track->m_instrument->createView(m_tabWidget);
 		m_tabWidget->addTab(m_instrumentView, tr("Plugin"), "plugin_tab", 0);

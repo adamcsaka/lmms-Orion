@@ -233,6 +233,7 @@ private:
 	QPixmap m_toolDrawOut = embed::getIconPixmap("edit_draw_outvalue");
 	QPixmap m_toolEditTangents = embed::getIconPixmap("edit_tangent");
 	QPixmap m_toolMove = embed::getIconPixmap("edit_move");
+	QPixmap m_toolSelect = embed::getIconPixmap("edit_select");
 	QPixmap m_toolYFlip = embed::getIconPixmap("flip_y");
 	QPixmap m_toolXFlip = embed::getIconPixmap("flip_x");
 

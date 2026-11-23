@@ -615,6 +615,12 @@ public:
 	QSize sizeHint() const override;
 	bool hasFocus() const;
 
+public slots:
+	void addSteps();
+	void removeSteps();
+	void duplicateContent();
+	void halveContent();
+
 signals:
 	void currentMidiClipChanged();
 
@@ -646,6 +652,10 @@ private:
 	ComboBox* m_snapComboBox;
 	QPushButton * m_clearGhostButton;
 	QDoubleSpinBox* m_stepsSpinBox;
+	QAction* m_addStepsAction;
+	QAction* m_removeStepsAction;
+	QAction* m_duplicateAction;
+	QAction* m_halveAction;
 
 };
 

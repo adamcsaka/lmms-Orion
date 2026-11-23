@@ -641,6 +641,10 @@ void ZynAddSubFxView::dropEvent( QDropEvent * _de )
 void ZynAddSubFxView::modelChanged()
 {
 	auto m = castModel<ZynAddSubFxInstrument>();
+	if (!m)
+	{
+		return;
+	}
 
 	// set models for controller knobs
 	m_portamento->setModel( &m->m_portamentoModel );

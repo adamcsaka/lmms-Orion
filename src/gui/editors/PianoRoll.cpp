@@ -5608,6 +5608,11 @@ PianoRollWindow::PianoRollWindow() :
 		}
 	});
 
+	m_removeStepsAction = stepsToolBar->addAction(embed::getIconPixmap("step_btn_remove"), tr("Remove steps (-1 Bar)"), this, &PianoRollWindow::removeSteps);
+	m_addStepsAction = stepsToolBar->addAction(embed::getIconPixmap("step_btn_add"), tr("Add steps (+1 Bar)"), this, &PianoRollWindow::addSteps);
+	m_duplicateAction = stepsToolBar->addAction(embed::getIconPixmap("step_btn_duplicate"), tr("Double content (x2)"), this, &PianoRollWindow::duplicateContent);
+	m_halveAction = stepsToolBar->addAction(embed::getIconPixmap("step_btn_remove"), tr("Halve content (/2)"), this, &PianoRollWindow::halveContent);
+
 	// setup our actual window
 	setFocusPolicy( Qt::StrongFocus );
 	setFocus();
@@ -5625,6 +5630,46 @@ PianoRollWindow::PianoRollWindow() :
 const MidiClip* PianoRollWindow::currentMidiClip() const
 {
 	return m_editor->currentMidiClip();
+}
+
+void PianoRollWindow::addSteps()
+{
+	if (m_editor->hasValidMidiClip())
+	{
+		auto* clip = const_cast<MidiClip*>(m_editor->currentMidiClip());
+		clip->addSteps();
+		if (m_stepsSpinBox) { m_stepsSpinBox->setValue(clip->fractionalSteps()); }
+	}
+}
+
+void PianoRollWindow::removeSteps()
+{
+	if (m_editor->hasValidMidiClip())
+	{
+		auto* clip = const_cast<MidiClip*>(m_editor->currentMidiClip());
+		clip->removeSteps();
+		if (m_stepsSpinBox) { m_stepsSpinBox->setValue(clip->fractionalSteps()); }
+	}
+}
+
+void PianoRollWindow::duplicateContent()
+{
+	if (m_editor->hasValidMidiClip())
+	{
+		auto* clip = const_cast<MidiClip*>(m_editor->currentMidiClip());
+		clip->duplicateContent();
+		if (m_stepsSpinBox) { m_stepsSpinBox->setValue(clip->fractionalSteps()); }
+	}
+}
+
+void PianoRollWindow::halveContent()
+{
+	if (m_editor->hasValidMidiClip())
+	{
+		auto* clip = const_cast<MidiClip*>(m_editor->currentMidiClip());
+		clip->scaleContent(50.0f);
+		if (m_stepsSpinBox) { m_stepsSpinBox->setValue(clip->fractionalSteps()); }
+	}
 }
 
 
@@ -5903,10 +5948,18 @@ void PianoRollWindow::updateAfterMidiClipChange()
 			QSignalBlocker blocker(m_stepsSpinBox);
 			m_stepsSpinBox->setEnabled(true);
 			m_stepsSpinBox->setValue(m_editor->currentMidiClip()->fractionalSteps());
+			if (m_removeStepsAction) { m_removeStepsAction->setEnabled(true); }
+			if (m_addStepsAction) { m_addStepsAction->setEnabled(true); }
+			if (m_duplicateAction) { m_duplicateAction->setEnabled(true); }
+			if (m_halveAction) { m_halveAction->setEnabled(true); }
 		}
 		else
 		{
 			m_stepsSpinBox->setEnabled(false);
+			if (m_removeStepsAction) { m_removeStepsAction->setEnabled(false); }
+			if (m_addStepsAction) { m_addStepsAction->setEnabled(false); }
+			if (m_duplicateAction) { m_duplicateAction->setEnabled(false); }
+			if (m_halveAction) { m_halveAction->setEnabled(false); }
 		}
 	}
 
