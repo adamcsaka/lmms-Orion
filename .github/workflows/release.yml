@@ -107,6 +107,7 @@ jobs:
 
   linux:
     name: Build Linux x86_64 AppImage
+    continue-on-error: true
     runs-on: ubuntu-24.04
     env:
       CMAKE_BUILD_PARALLEL_LEVEL: 4
@@ -123,6 +124,7 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y --no-install-recommends \
             $(xargs < .github/workflows/deps-ubuntu-24.04-gcc.txt) \
+            qt6-base-dev qt6-base-dev-tools libqt6svg6-dev qt6-tools-dev qt6-tools-dev-tools \
             extra-cmake-modules ninja-build libfltk1.3-dev || true
 
       - name: Configure CMake
@@ -149,6 +151,7 @@ jobs:
 
   macos:
     name: Build macOS Apple Silicon / Universal
+    continue-on-error: true
     runs-on: macos-14
     env:
       CMAKE_BUILD_PARALLEL_LEVEL: 4
@@ -189,11 +192,13 @@ jobs:
 
   publish-release:
     name: Publish GitHub Release
+    if: always() && (needs.windows.result == 'success' || needs.linux.result == 'success' || needs.macos.result == 'success')
     needs: [windows, linux, macos]
     runs-on: ubuntu-latest
     steps:
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           path: release-artifacts
 
