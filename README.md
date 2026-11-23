@@ -20,9 +20,32 @@
 
 ---
 
-## Key Differences & Enhancements from Upstream LMMS (v1 – v6)
+## Key Differences & Enhancements from Upstream LMMS (v1 – v7)
 
 Below is the complete summary of all architectural and feature enhancements introduced across the Orion development milestones:
+
+### 🎨 Milestone v7: Theme Customization, Engine Stability & Cloud Releases
+* **Dynamic Theme & Appearance Engine (`ThemeManager` & `ThemeDialog`):**
+  * Instant, zero-overhead Qt palette and styling system with real-time live preview.
+  * **5 Factory Presets:** *Orion Obsidian Gold*, *Cyber Neon Cyan*, *Studio Dark Lime*, *Solarized Amber*, and *Classic LMMS*.
+  * **Live Customization:** Configurable Accent color (knobs, LED meters, active buttons, selection outlines), Base panel color (toolbars, sidebars), and Workspace background.
+  * **Custom Wallpaper Support:** Load custom artwork/wallpapers (`.png`, `.jpg`, `.svg`) drawn smoothly across the main MDI workspace canvas.
+  * **Project-Specific Theme Persistence (`<projecttheme>` XML):** Projects can save their unique colors and wallpaper directly into `.mmp` / `.mmpz` files, restoring the track's visual theme on load.
+  * **Global Override Protection:** *"Apply project-specific themes on load"* toggle in both Settings and Theme Dialog allows users to permanently enforce their own favorite theme.
+* **Upstream Engine Stability & Hardware Crash Prevention:**
+  * **ZynAddSubFX SVFilter Null Pointer Fix (0xc0000005):** Resolved access violation in `SVFilter::singlefilterout()` during fast preset switching and parameter randomization.
+  * **SlicerT Thread-Safety & Decoupling:** Decoupled waveform rendering and Qt signal-slot bindings from the real-time audio callback (`SlicerT::play()`) using queued connections to eradicate audio glitches and UI freezes.
+  * **Vestige, Carla & VstEffect Double-Deletion Fix:** Eliminated heap double-free crashes when closing plugin windows or deleting tracks.
+  * **AudioFileProcessor Empty Buffer Guard:** Prevented host crashes when loading empty or zero-byte audio files.
+  * **PatternClipView Batch Pixmap Rendering:** Accelerated Song Editor timeline scrolling in large arrangements via tiled pixmap caching.
+  * **Native Windows Hardware SEH Interceptor:** Integrated top-level Win32 structured exception handling with diagnostic modal alerts showing instruction addresses and fault codes instead of silent app crashes.
+* **Precision Sequencing & Modulation Controls:**
+  * **Automation Editor Multi-Node Selection & Editing:** Rubber-band box selection, multi-node dragging in time and value, unquantized Ctrl-drag, keyboard micro-stepping (Shift/Ctrl + Arrows), and step multipliers (`-1 Bar`, `+1 Bar`, `x2`, `/2`).
+  * **Piano Roll Quick Length Controls:** Dedicated buttons on the toolbar to add/remove bars and double/halve pattern content directly from Piano Roll.
+  * **Controller Rack Presets ("LFO Presets"):** Save and load complex multi-controller LFO chains with one click.
+  * **60 FPS GUI Modulation Throttling:** Decoupled audio DSP calculations from Qt GUI paint queues, eliminating mouse stutter during high-speed LFO modulations.
+* **Multi-Platform Automated Cloud Releases (GitHub Actions):**
+  * Automated cloud pipeline producing official release binaries for **Windows x64** (portable ZIP & setup EXE), **Linux x86_64** (.AppImage), and **macOS** (.dmg) with zero local CPU load.
 
 ### 🚀 Milestone v1: Modern Architecture & Toolchain Modernization
 * **Qt 6.8 x64 & MSVC 2022 Integration:** Fully migrated from legacy Qt 5 / MinGW toolchains to native Microsoft Visual C++ 2022 and modern Qt 6.8.
@@ -95,10 +118,10 @@ powershell -ExecutionPolicy Bypass -File C:\lmms\lmms-repo\build-local.ps1
 
 ### Portable Package Generation
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\lmms\lmms-repo\deploy-v6.ps1
+powershell -ExecutionPolicy Bypass -File C:\lmms\lmms-repo\deploy-v7.ps1
 ```
 The deploy script outputs a self-contained portable distribution to:
-`C:\Users\ahsoka\Downloads\LMMS-Orion-v6`
+`C:\Users\ahsoka\Downloads\LMMS-Orion-v7`
 
 ---
 
