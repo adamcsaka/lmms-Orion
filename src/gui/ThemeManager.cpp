@@ -17,23 +17,23 @@
  */
 
 #include "ThemeManager.h"
-#include "ConfigManager.h"
-#include "GuiApplication.h"
-#include "MainWindow.h"
-#include "Engine.h"
-#include "Song.h"
 
 #include <QApplication>
+#include <QDebug>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTextStream>
-#include <QDebug>
 
-namespace lmms::gui
-{
+#include "ConfigManager.h"
+#include "Engine.h"
+#include "GuiApplication.h"
+#include "MainWindow.h"
+#include "Song.h"
+
+namespace lmms::gui {
 
 ThemeManager* ThemeManager::inst()
 {
@@ -47,10 +47,7 @@ ThemeManager::ThemeManager()
 
 	// Global default is Orion Obsidian Gold
 	QString defName = ConfigManager::inst()->value("ui", "defaultthemename");
-	if (defName.isEmpty())
-	{
-		defName = "Orion Obsidian Gold";
-	}
+	if (defName.isEmpty()) { defName = "Orion Obsidian Gold"; }
 
 	for (const auto& p : m_factoryPresets)
 	{
@@ -178,10 +175,7 @@ void ThemeManager::ensureBaseStyleSheetLoaded()
 	if (m_baseStyleSheet.isEmpty())
 	{
 		QFile file("resources:style.css");
-		if (file.open(QIODevice::ReadOnly))
-		{
-			m_baseStyleSheet = QString::fromUtf8(file.readAll());
-		}
+		if (file.open(QIODevice::ReadOnly)) { m_baseStyleSheet = QString::fromUtf8(file.readAll()); }
 	}
 }
 
@@ -193,10 +187,7 @@ void ThemeManager::applyTheme(const ThemePreset& preset, bool markProject)
 	if (markProject)
 	{
 		m_currentTheme.isProjectTheme = true;
-		if (Engine::getSong())
-		{
-			Engine::getSong()->setModified();
-		}
+		if (Engine::getSong()) { Engine::getSong()->setModified(); }
 	}
 
 	// Dynamic QSS application
@@ -227,10 +218,7 @@ void ThemeManager::applyThemeByName(const QString& name)
 	QString userDir = ConfigManager::inst()->workingDir() + "themes/";
 	QString path = userDir + name + ".lmms-theme";
 	ThemePreset p;
-	if (loadPresetFromFile(path, p))
-	{
-		applyTheme(p);
-	}
+	if (loadPresetFromFile(path, p)) { applyTheme(p); }
 }
 
 void ThemeManager::setAccentColor(const QColor& color)
@@ -243,10 +231,7 @@ void ThemeManager::setAccentColor(const QColor& color)
 	m_currentTheme.beatLineColor = color.darker(150).name();
 	m_currentTheme.selectedColor = color.darker(130).name();
 	m_currentTheme.textActive = (color.lightness() > 160) ? "#101010" : "#ffffff";
-	if (m_currentTheme.borderColor.isEmpty())
-	{
-		m_currentTheme.borderColor = color.name();
-	}
+	if (m_currentTheme.borderColor.isEmpty()) { m_currentTheme.borderColor = color.name(); }
 	applyTheme(m_currentTheme, true);
 }
 
@@ -284,9 +269,7 @@ void ThemeManager::clearBackgroundPicture()
 }
 
 void ThemeManager::resetToGlobalDefault()
-{
-	applyTheme(m_globalDefaultTheme, false);
-}
+{ applyTheme(m_globalDefaultTheme, false); }
 
 bool ThemeManager::applyProjectThemes() const
 {
@@ -296,9 +279,7 @@ bool ThemeManager::applyProjectThemes() const
 }
 
 void ThemeManager::setApplyProjectThemes(bool enable)
-{
-	ConfigManager::inst()->setValue("ui", "applyprojectthemes", QString::number(enable ? 1 : 0));
-}
+{ ConfigManager::inst()->setValue("ui", "applyprojectthemes", QString::number(enable ? 1 : 0)); }
 
 void ThemeManager::saveProjectTheme(QDomDocument& doc, QDomElement& parent)
 {
@@ -321,7 +302,8 @@ void ThemeManager::saveProjectTheme(QDomDocument& doc, QDomElement& parent)
 	elem.setAttribute("barLine", m_currentTheme.barLineColor);
 	elem.setAttribute("note", m_currentTheme.noteColor);
 	elem.setAttribute("selected", m_currentTheme.selectedColor);
-	elem.setAttribute("border", m_currentTheme.borderColor.isEmpty() ? m_currentTheme.accentColor : m_currentTheme.borderColor);
+	elem.setAttribute(
+		"border", m_currentTheme.borderColor.isEmpty() ? m_currentTheme.accentColor : m_currentTheme.borderColor);
 
 	// Store background image as relative path if located inside project directory
 	QString bg = m_currentTheme.backgroundPic;
@@ -331,10 +313,7 @@ void ThemeManager::saveProjectTheme(QDomDocument& doc, QDomElement& parent)
 		if (!projPath.isEmpty())
 		{
 			QDir projDir(QFileInfo(projPath).absolutePath());
-			if (bg.startsWith(projDir.absolutePath()))
-			{
-				bg = projDir.relativeFilePath(bg);
-			}
+			if (bg.startsWith(projDir.absolutePath())) { bg = projDir.relativeFilePath(bg); }
 		}
 	}
 	elem.setAttribute("bg", bg);
@@ -374,19 +353,13 @@ void ThemeManager::loadProjectTheme(const QDomElement& elem, const QString& proj
 		{
 			QDir dir(projectPath);
 			QString absPath = dir.absoluteFilePath(bg);
-			if (QFile::exists(absPath))
-			{
-				p.backgroundPic = absPath;
-			}
+			if (QFile::exists(absPath)) { p.backgroundPic = absPath; }
 			else
 			{
 				p.backgroundPic = "";
 			}
 		}
-		else if (QFile::exists(bg))
-		{
-			p.backgroundPic = bg;
-		}
+		else if (QFile::exists(bg)) { p.backgroundPic = bg; }
 		else
 		{
 			p.backgroundPic = "";
@@ -424,10 +397,7 @@ bool ThemeManager::savePresetToFile(const QString& filePath, const ThemePreset& 
 	QFileInfo fi(filePath);
 	QDir().mkpath(fi.absolutePath());
 
-	if (!f.open(QIODevice::WriteOnly))
-	{
-		return false;
-	}
+	if (!f.open(QIODevice::WriteOnly)) { return false; }
 	f.write(doc.toJson());
 	return true;
 }
@@ -435,15 +405,9 @@ bool ThemeManager::savePresetToFile(const QString& filePath, const ThemePreset& 
 bool ThemeManager::loadPresetFromFile(const QString& filePath, ThemePreset& p)
 {
 	QFile f(filePath);
-	if (!f.open(QIODevice::ReadOnly))
-	{
-		return false;
-	}
+	if (!f.open(QIODevice::ReadOnly)) { return false; }
 	QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
-	if (doc.isNull() || !doc.isObject())
-	{
-		return false;
-	}
+	if (doc.isNull() || !doc.isObject()) { return false; }
 	QJsonObject root = doc.object();
 	p.name = root["name"].toString();
 	p.baseColor = root["baseColor"].toString();
@@ -499,8 +463,10 @@ QString ThemeManager::generateThemeQss(const ThemePreset& p) const
 	// Subwindows and Window Frames
 	ts << "\n/* Subwindows and Window Frames */\n"
 	   << "lmms--gui--SubWindow {\n"
-	   << "    color: qlineargradient(spread:pad, x1:0, y1:0, x2:0, y2:1, stop:0 " << inactiveTitleStart.name() << ", stop:1 " << inactiveTitleEnd.name() << ");\n"
-	   << "    qproperty-activeColor: qlineargradient(spread:pad, x1:0, y1:0, x2:0, y2:1, stop:0 " << activeTitleStart.name() << ", stop:1 " << activeTitleEnd.name() << ");\n"
+	   << "    color: qlineargradient(spread:pad, x1:0, y1:0, x2:0, y2:1, stop:0 " << inactiveTitleStart.name()
+	   << ", stop:1 " << inactiveTitleEnd.name() << ");\n"
+	   << "    qproperty-activeColor: qlineargradient(spread:pad, x1:0, y1:0, x2:0, y2:1, stop:0 "
+	   << activeTitleStart.name() << ", stop:1 " << activeTitleEnd.name() << ");\n"
 	   << "    qproperty-borderColor: " << border.name() << ";\n"
 	   << "}\n"
 	   << "lmms--gui--SubWindow > QLabel {\n"
