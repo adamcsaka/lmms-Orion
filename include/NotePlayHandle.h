@@ -115,7 +115,7 @@ public:
 	/*! Returns whether playback of note is finished and thus handle can be deleted */
 	bool isFinished() const override
 	{
-		return m_released && framesLeft() <= 0;
+		return m_forceFinished || (m_released && framesLeft() <= 0);
 	}
 
 	/*! Returns number of frames left for playback */
@@ -129,6 +129,12 @@ public:
 
 	/*! Releases the note (and plays release frames) */
 	void noteOff( const f_cnt_t offset = 0 );
+
+	/*! Immediately terminates note and cleans up sub-notes to steal voice for polyphony limit */
+	void forceFinish();
+
+	/*! Immediately fades out and terminates note to steal voice for polyphony limit */
+	void forceRelease();
 
 	/*! Returns number of frames to be played until the note is going to be released */
 	f_cnt_t framesBeforeRelease() const
@@ -312,6 +318,7 @@ private:
 											// release of note
 	NotePlayHandleList m_subNotes;			// used for chords and arpeggios
 	volatile bool m_released;				// indicates whether note is released
+	volatile bool m_forceFinished;			// indicates note was forcibly terminated by voice stealing
 	bool m_releaseStarted;
 	bool m_hasMidiNote;
 	bool m_hasParent;						// indicates whether note has parent

@@ -137,6 +137,7 @@ public:
 	static void saveWidgetState( QWidget * _w, QDomElement & _de );
 	static void restoreWidgetState( QWidget * _w, const QDomElement & _de );
 	void setAllSubWindowsDetached(bool detached);
+	void setWorkspaceBackground(const QString & filePath);
 
 	bool eventFilter(QObject* watched, QEvent* event) override;
 
@@ -154,6 +155,7 @@ public slots:
 	bool saveProjectAsNewVersion();
 	void saveProjectAsDefaultTemplate();
 	void showSettingsDialog();
+	void showThemeDialog();
 	void aboutLMMS();
 	void help();
 	void toggleAutomationEditorWin();
@@ -173,6 +175,7 @@ public slots:
 	void redo();
 
 	void autoSave();
+	void exportPattern();
 
 private slots:
 	void onExportProjectMidi();

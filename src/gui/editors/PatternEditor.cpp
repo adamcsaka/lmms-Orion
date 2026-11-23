@@ -25,17 +25,22 @@
 #include "PatternEditor.h"
 
 #include <QAction>
+#include <QActionGroup>
+#include <QToolButton>
 #include <QVBoxLayout>
 
+#include "RandomInstrumentationDialog.h"
 #include "ClipView.h"
 #include "ComboBox.h"
 #include "DataFile.h"
+#include "GuiApplication.h"
 #include "embed.h"
 #include "MainWindow.h"
 #include "PatternStore.h"
 #include "PatternTrack.h"
 #include "Song.h"
 #include "StringPairDrag.h"
+#include "TextFloat.h"
 #include "TimeLineWidget.h"
 #include "TrackView.h"
 
@@ -324,6 +329,97 @@ PatternEditorWindow::PatternEditorWindow(PatternStore* ps) :
 						m_editor, SLOT(addSampleTrack()));
 	trackAndStepActionsToolBar->addAction(embed::getIconPixmap("add_automation"), tr("Add automation-track"),
 						m_editor, SLOT(addAutomationTrack()));
+	auto recordAutomationAction = trackAndStepActionsToolBar->addAction(
+		embed::getIconPixmap("record"), tr("Record automation into pattern (automatically records moved knobs/sliders)"));
+	recordAutomationAction->setCheckable(true);
+	recordAutomationAction->setChecked(ps->isRecordingAutomation());
+	connect(recordAutomationAction, &QAction::toggled, [ps](bool checked) {
+		ps->setRecordingAutomation(checked);
+	});
+
+	auto recordMenu = new QMenu(m_toolBar);
+	auto touchAction = recordMenu->addAction(tr("Touch mode (Auto-disarm after 4s idle)"));
+	touchAction->setCheckable(true);
+	touchAction->setChecked(ps->recordMode() == PatternStore::RecordMode::Touch);
+	auto writeAction = recordMenu->addAction(tr("Write mode (Continuous recording)"));
+	writeAction->setCheckable(true);
+	writeAction->setChecked(ps->recordMode() == PatternStore::RecordMode::Write);
+	auto modeGroup = new QActionGroup(recordMenu);
+	modeGroup->addAction(touchAction);
+	modeGroup->addAction(writeAction);
+	connect(touchAction, &QAction::triggered, [ps]() {
+		ps->setRecordMode(PatternStore::RecordMode::Touch);
+	});
+	connect(writeAction, &QAction::triggered, [ps]() {
+		ps->setRecordMode(PatternStore::RecordMode::Write);
+	});
+	recordAutomationAction->setMenu(recordMenu);
+
+	connect(ps, &PatternStore::recordingAutomationChanged, recordAutomationAction, [recordAutomationAction](bool rec) {
+		if (recordAutomationAction->isChecked() != rec)
+		{
+			recordAutomationAction->setChecked(rec);
+		}
+	});
+
+	auto cleanAutoAction = trackAndStepActionsToolBar->addAction(
+		embed::getIconPixmap("edit_delete"), tr("Remove unused automation tracks"));
+	connect(cleanAutoAction, &QAction::triggered, [ps]() {
+		int count = ps->removeUnusedAutomationTracks();
+		TextFloat::displayMessage(tr("Cleaned Automation"), tr("Removed %1 unused automation track(s) from Pattern Editor.").arg(count), embed::getIconPixmap("edit_delete"), 2500);
+	});
+
+	auto exportPatternAction = trackAndStepActionsToolBar->addAction(
+		embed::getIconPixmap("project_export"), tr("Export pattern to audio file..."));
+	connect(exportPatternAction, &QAction::triggered, []() {
+		if (getGUI() && getGUI()->mainWindow())
+		{
+			getGUI()->mainWindow()->exportPattern();
+		}
+	});
+
+	trackAndStepActionsToolBar->addSeparator();
+
+	auto genRandomBtn = new QToolButton(trackAndStepActionsToolBar);
+	genRandomBtn->setText(tr("Random Synths..."));
+	genRandomBtn->setIcon(embed::getIconPixmap("arp_random"));
+	genRandomBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+	genRandomBtn->setToolTip(tr("Generate randomized synth instrument tracks with specified instrument & effect count into Pattern Editor"));
+	connect(genRandomBtn, &QToolButton::clicked, [this, ps]() {
+		RandomInstrumentationDialog dlg(this);
+		if (dlg.exec() == QDialog::Accepted)
+		{
+			generateRandomInstrumentation(ps, dlg.instrumentCount(), dlg.effectCount(), dlg.polyphonyCount());
+		}
+	});
+	trackAndStepActionsToolBar->addWidget(genRandomBtn);
+
+	auto randomizeAllBtn = new QToolButton(trackAndStepActionsToolBar);
+	randomizeAllBtn->setText(tr("Randomize All"));
+	randomizeAllBtn->setIcon(embed::getIconPixmap("random_wave_active"));
+	randomizeAllBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+	randomizeAllBtn->setToolTip(tr("Randomize knobs, sliders, and synth parameters across all instruments"));
+	connect(randomizeAllBtn, &QToolButton::clicked, [this]() {
+		auto randomizeTrackList = [](const TrackContainer::TrackList& tl) {
+			for (Track* t : tl)
+			{
+				auto it = dynamic_cast<InstrumentTrack*>(t);
+				if (!it) { continue; }
+				it->randomizeParameters(false);
+			}
+		};
+
+		randomizeTrackList(Engine::getSong()->tracks());
+		randomizeTrackList(Engine::patternStore()->tracks());
+
+		TextFloat::displayMessage(
+			tr("Instruments Randomized"),
+			tr("Randomized knobs, sliders, and synth parameters across all instruments!"),
+			embed::getIconPixmap("random_wave_active"),
+			2500
+		);
+	});
+	trackAndStepActionsToolBar->addWidget(randomizeAllBtn);
 
 	auto stretch = new QWidget(m_toolBar);
 	stretch->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);

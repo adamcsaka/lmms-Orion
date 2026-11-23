@@ -27,7 +27,10 @@
 #include "AutomationClip.h"
 #include "ConfigManager.h"
 #include "ControllerConnection.h"
+#include "AudioBusHandle.h"
 #include "DataFile.h"
+#include "Effect.h"
+#include "EffectChain.h"
 #include "GuiApplication.h"
 #include "Mixer.h"
 #include "InstrumentTrackView.h"
@@ -61,9 +64,11 @@ InstrumentTrack::InstrumentTrack(TrackContainer* tc) :
 	m_volumeModel(DefaultVolume, MinVolume, MaxVolume, 0.1f, this, tr("Volume")),
 	m_panningModel(DefaultPanning, PanningLeft, PanningRight, 0.1f, this, tr("Panning")),
 	m_audioBusHandle(tr("unnamed_track"), true, &m_volumeModel, &m_panningModel, &m_mutedModel),
-	m_pitchModel(0, MinPitchDefault, MaxPitchDefault, 1, this, tr("Pitch")),
+	m_pitchModel(0, MinPitchDefault, MaxPitchDefault, 0.001f, this, tr("Pitch")),
 	m_pitchRangeModel(1, 1, 60, this, tr("Pitch range")),
 	m_mixerChannelModel(0, 0, 0, this, tr("Mixer channel")),
+	m_midiGroupModel(0, 0, 16, this, tr("MIDI Group")),
+	m_maxPolyphonyModel(16, 0, 64, this, tr("Max polyphony")),
 	m_useMasterPitchModel(true, this, tr("Master pitch")),
 	m_instrument(nullptr),
 	m_soundShaping(this),
@@ -73,7 +78,7 @@ InstrumentTrack::InstrumentTrack(TrackContainer* tc) :
 	m_microtuner()
 {
 	m_pitchModel.setCenterValue( 0 );
-	m_pitchModel.setStrictStepSize(true);
+	m_pitchModel.setStrictStepSize(false);
 	m_panningModel.setCenterValue( DefaultPanning );
 	m_baseNoteModel.setInitValue( DefaultKey );
 	m_firstKeyModel.setInitValue(0);
@@ -109,6 +114,7 @@ InstrumentTrack::InstrumentTrack(TrackContainer* tc) :
 	connect(&m_pitchModel, SIGNAL(dataChanged()), this, SLOT(updatePitch()), Qt::DirectConnection);
 	connect(&m_pitchRangeModel, SIGNAL(dataChanged()), this, SLOT(updatePitchRange()), Qt::DirectConnection);
 	connect(&m_mixerChannelModel, SIGNAL(dataChanged()), this, SLOT(updateMixerChannel()), Qt::DirectConnection);
+	connect(&m_maxPolyphonyModel, SIGNAL(dataChanged()), this, SLOT(updatePolyphony()), Qt::DirectConnection);
 
 	autoAssignMidiDevice(true);
 }
@@ -310,6 +316,30 @@ void InstrumentTrack::processInEvent( const MidiEvent& event, const TimePos& tim
 	if (Engine::getSong()->isExporting() && event.source() == MidiEvent::Source::External)
 	{
 		return;
+	}
+
+	static thread_local bool s_inProcessInEventBroadcast = false;
+	if( m_midiGroupModel.value() > 0 && !s_inProcessInEventBroadcast )
+	{
+		s_inProcessInEventBroadcast = true;
+		std::vector<TrackContainer*> containers;
+		if( Engine::getSong() ) { containers.push_back( Engine::getSong() ); }
+		if( Engine::patternStore() ) { containers.push_back( Engine::patternStore() ); }
+		for( auto tc : containers )
+		{
+			for( Track* t : tc->tracks() )
+			{
+				if( t != this && t->type() == Track::Type::Instrument && !t->isMuted() )
+				{
+					auto it = static_cast<InstrumentTrack*>( t );
+					if( it->midiGroupModel()->value() == m_midiGroupModel.value() )
+					{
+						it->processInEvent( event, time, offset );
+					}
+				}
+			}
+		}
+		s_inProcessInEventBroadcast = false;
 	}
 
 	bool eventHandled = false;
@@ -644,7 +674,7 @@ void InstrumentTrack::updatePitch()
 void InstrumentTrack::updatePitchRange()
 {
 	const int r = m_pitchRangeModel.value();
-	m_pitchModel.setRange( MinPitchDefault * r, MaxPitchDefault * r );
+	m_pitchModel.setRange( MinPitchDefault * r, MaxPitchDefault * r, 0.001f );
 
 	processOutEvent( MidiEvent( MidiControlChange, midiPort()->realOutputChannel(),
 								MidiControllerRegisteredParameterNumberLSB, MidiPitchBendSensitivityRPN & 0x7F ) );
@@ -659,6 +689,49 @@ void InstrumentTrack::updatePitchRange()
 void InstrumentTrack::updateMixerChannel()
 {
 	m_audioBusHandle.setNextMixerChannel(m_mixerChannelModel.value());
+}
+
+
+
+
+void InstrumentTrack::updatePolyphony()
+{
+	enforcePolyphonyLimit( m_maxPolyphonyModel.value() );
+}
+
+
+
+
+void InstrumentTrack::enforcePolyphonyLimit( int maxVoices )
+{
+	if( maxVoices <= 0 ) { return; }
+
+	// First, prune handles that are already finished or null
+	for( auto it = m_processHandles.begin(); it != m_processHandles.end(); )
+	{
+		if( !(*it) || (*it)->isFinished() )
+		{
+			it = m_processHandles.erase( it );
+		}
+		else
+		{
+			++it;
+		}
+	}
+
+	while( m_processHandles.size() > static_cast<size_t>(maxVoices) )
+	{
+		NotePlayHandle* oldest = m_processHandles.front();
+		m_processHandles.pop_front();
+		if( oldest )
+		{
+			if( oldest->midiKey() >= 0 && oldest->midiKey() < NumKeys && m_notes[oldest->midiKey()] == oldest )
+			{
+				m_notes[oldest->midiKey()] = nullptr;
+			}
+			oldest->forceFinish();
+		}
+	}
 }
 
 
@@ -765,9 +838,10 @@ bool InstrumentTrack::play( const TimePos & _start, const f_cnt_t _frames,
 		while (nit != notes.end() && (*nit)->pos() < c->length() - c->startTimeOffset())
 		{
 			const auto currentNote = *nit;
-			// Skip any notes note at the current time pos or not overlapping with the start.
-			if (!(currentNote->pos() == cur_start
-				|| (cur_start == -c->startTimeOffset() && (*nit)->pos() < cur_start && (*nit)->endPos() > cur_start)))
+			const bool shouldTrigger = (currentNote->pos() == cur_start
+				|| (cur_start == -c->startTimeOffset() && (*nit)->pos() < cur_start && (*nit)->endPos() > cur_start));
+
+			if (!shouldTrigger)
 			{
 				++nit;
 				continue;
@@ -779,7 +853,7 @@ bool InstrumentTrack::play( const TimePos & _start, const f_cnt_t _frames,
 			// plays for the whole length of the sample
 			const auto noteFrames = currentNote->type() == Note::Type::Step
 				? 0
-				: (currentNote->endPos() - cur_start - noteOverlap) * frames_per_tick;
+				: (currentNote->endPos().getTicks() - cur_start.getTicks() - noteOverlap) * frames_per_tick;
 
 			NotePlayHandle* notePlayHandle = NotePlayHandleManager::acquire(this, _offset, noteFrames, *currentNote);
 			notePlayHandle->setPatternTrack(pattern_track);
@@ -792,6 +866,37 @@ bool InstrumentTrack::play( const TimePos & _start, const f_cnt_t _frames,
 			}
 
 			Engine::audioEngine()->addPlayHandle( notePlayHandle );
+
+			static thread_local bool s_inMidiGroupPlayBroadcast = false;
+			if( m_midiGroupModel.value() > 0 && !s_inMidiGroupPlayBroadcast )
+			{
+				s_inMidiGroupPlayBroadcast = true;
+				std::vector<TrackContainer*> containers;
+				if( Engine::getSong() ) { containers.push_back( Engine::getSong() ); }
+				if( Engine::patternStore() ) { containers.push_back( Engine::patternStore() ); }
+				for( auto tc : containers )
+				{
+					for( Track* t : tc->tracks() )
+					{
+						if( t != this && t->type() == Track::Type::Instrument && !t->isMuted() )
+						{
+							auto it = static_cast<InstrumentTrack*>( t );
+							if( it->midiGroupModel()->value() == m_midiGroupModel.value() && it->instrument() != nullptr )
+							{
+								NotePlayHandle* peerHandle = NotePlayHandleManager::acquire(it, _offset, noteFrames, *currentNote);
+								peerHandle->setPatternTrack(pattern_track);
+								if( _clip_num < 0 )
+								{
+									peerHandle->setSongGlobalParentOffset( c->startPosition() + c->startTimeOffset());
+								}
+								Engine::audioEngine()->addPlayHandle( peerHandle );
+							}
+						}
+					}
+				}
+				s_inMidiGroupPlayBroadcast = false;
+			}
+
 			played_a_note = true;
 			++nit;
 		}
@@ -829,6 +934,8 @@ void InstrumentTrack::saveTrackSpecificSettings(QDomDocument& doc, QDomElement& 
 	m_pitchRangeModel.saveSettings( doc, thisElement, "pitchrange" );
 
 	m_mixerChannelModel.saveSettings( doc, thisElement, "mixch" );
+	m_midiGroupModel.saveSettings( doc, thisElement, "midigroup" );
+	m_maxPolyphonyModel.saveSettings( doc, thisElement, "polyphony" );
 	m_baseNoteModel.saveSettings( doc, thisElement, "basenote" );
 	m_firstKeyModel.saveSettings(doc, thisElement, "firstkey");
 	m_lastKeyModel.saveSettings(doc, thisElement, "lastkey");
@@ -901,6 +1008,8 @@ void InstrumentTrack::loadTrackSpecificSettings( const QDomElement & thisElement
 	if ( !m_previewMode )
 	{
 		m_mixerChannelModel.loadSettings( thisElement, "mixch" );
+		m_midiGroupModel.loadSettings( thisElement, "midigroup" );
+		m_maxPolyphonyModel.loadSettings( thisElement, "polyphony" );
 	}
 	m_baseNoteModel.loadSettings( thisElement, "basenote" );
 	m_firstKeyModel.loadSettings(thisElement, "firstkey");
@@ -943,19 +1052,27 @@ void InstrumentTrack::loadTrackSpecificSettings( const QDomElement & thisElement
 			else if(node.nodeName() == "instrument")
 			{
 				using PluginKey = Plugin::Descriptor::SubPluginFeatures::Key;
-				PluginKey key(node.toElement().elementsByTagName("key").item(0).toElement());
+				auto keyElem = node.toElement().elementsByTagName("key").item(0).toElement();
+				std::unique_ptr<PluginKey> key;
+				if (!keyElem.isNull())
+				{
+					key = std::make_unique<PluginKey>(keyElem);
+				}
 
 				if (reuseInstrument)
 				{
-					m_instrument->restoreState(node.firstChildElement());
+					if (m_instrument) { m_instrument->restoreState(node.firstChildElement()); }
 				}
 				else
 				{
 					delete m_instrument;
 					m_instrument = nullptr;
 					m_instrument = Instrument::instantiate(
-						node.toElement().attribute("name"), this, &key);
-					m_instrument->restoreState(node.firstChildElement());
+						node.toElement().attribute("name"), this, key.get());
+					if (m_instrument)
+					{
+						m_instrument->restoreState(node.firstChildElement());
+					}
 					emit instrumentChanged();
 				}
 			}
@@ -1091,6 +1208,211 @@ void InstrumentTrack::autoAssignMidiDevice(bool assign)
 	{
 		m_midiPort.subscribeReadablePort(device, assign);
 		m_hasAutoMidiDev = assign;
+	}
+}
+
+
+void InstrumentTrack::randomizeParameters(bool randomizePitch)
+{
+	addJournalCheckPoint();
+
+	if (randomizePitch)
+	{
+		m_pitchModel.setValue(static_cast<float>((rand() % 25 - 12) * 100));
+	}
+	m_panningModel.setValue(static_cast<float>((rand() % 161) - 80));
+
+	QList<AutomatableModel*> models = findChildren<AutomatableModel*>();
+	if (m_instrument)
+	{
+		models.append(m_instrument->findChildren<AutomatableModel*>());
+	}
+
+	for (auto* m : models)
+	{
+		// Invariant: Never mute/solo tracks, never change track group, and never scramble mixer channel routing
+		if (!m || m == &m_pitchModel || m == &m_volumeModel || m == &m_panningModel ||
+			m == &m_mutedModel || m == &m_soloModel ||
+			m == &m_mixerChannelModel || m == &m_midiGroupModel || m == &m_maxPolyphonyModel ||
+			m == &m_baseNoteModel || m == &m_firstKeyModel || m == &m_lastKeyModel)
+		{
+			continue;
+		}
+
+		const QString name = (m->displayName().isEmpty() ? m->objectName() : m->displayName()).toLower();
+		if (name.contains("mute") || name.contains("solo") ||
+			name.contains("mixer") || name.contains("channel") ||
+			name.contains("group") || name.contains("routing") || name.contains("route") ||
+			name.contains("bypass"))
+		{
+			continue;
+		}
+		if (name.contains("master volume") || name.contains("master vol"))
+		{
+			if (auto fm = m->dynamicCast<FloatModel>())
+			{
+				fm->setValue(0.7f + 0.3f * (static_cast<float>(rand()) / RAND_MAX));
+			}
+			continue;
+		}
+
+		if (name.contains("enable") || name.contains("active") || name.contains("power"))
+		{
+			if (auto bm = m->dynamicCast<BoolModel>())
+			{
+				bm->setValue(true);
+			}
+			continue;
+		}
+
+		if (!randomizePitch && (name.contains("coarse") || name.contains("semi") || name.contains("octave") || name.contains("pitch") || name.contains("detun") || name.contains("fine")))
+		{
+			continue;
+		}
+
+		if (name.contains("cutoff"))
+		{
+			if (auto fm = m->dynamicCast<FloatModel>())
+			{
+				float minVal = fm->minValue();
+				float maxVal = fm->maxValue();
+				if (std::isfinite(minVal) && std::isfinite(maxVal) && maxVal > minVal)
+				{
+					// Ensure cutoff is between 25% and 100% of range so filter isn't muffled
+					float r = 0.25f + 0.75f * (static_cast<float>(rand()) / static_cast<float>(RAND_MAX));
+					fm->setValue(minVal + r * (maxVal - minVal));
+				}
+			}
+			continue;
+		}
+
+		if (name.contains("resonance") || name.contains("filter q") || name.contains("res") || name == "q")
+		{
+			if (auto fm = m->dynamicCast<FloatModel>())
+			{
+				float minVal = fm->minValue();
+				float maxVal = fm->maxValue();
+				if (std::isfinite(minVal) && std::isfinite(maxVal) && maxVal > minVal)
+				{
+					// Cap resonance at 70% of range to prevent ear-damaging volume spikes or speaker distortion
+					float maxSafe = minVal + 0.70f * (maxVal - minVal);
+					float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+					fm->setValue(minVal + r * (maxSafe - minVal));
+				}
+			}
+			continue;
+		}
+
+		if (name.contains("attack"))
+		{
+			if (auto fm = m->dynamicCast<FloatModel>())
+			{
+				float minVal = fm->minValue();
+				float maxVal = fm->maxValue();
+				if (std::isfinite(minVal) && std::isfinite(maxVal) && maxVal > minVal)
+				{
+					// Keep attack brisk (0 to 25% of range)
+					float r = 0.25f * (static_cast<float>(rand()) / static_cast<float>(RAND_MAX));
+					fm->setValue(minVal + r * (maxVal - minVal));
+				}
+			}
+			continue;
+		}
+
+		if (name.contains("release") || name.contains("rel"))
+		{
+			if (auto fm = m->dynamicCast<FloatModel>())
+			{
+				float minVal = fm->minValue();
+				float maxVal = fm->maxValue();
+				if (std::isfinite(minVal) && std::isfinite(maxVal) && maxVal > minVal)
+				{
+					// Cap release to prevent excessive overlapping voices and runaway CPU load (max 25% or 1.2s)
+					float maxRel = std::min(maxVal, minVal + 0.25f * (maxVal - minVal));
+					if (maxRel > 1.2f && minVal < 1.2f) { maxRel = 1.2f; }
+					float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+					fm->setValue(minVal + r * (maxRel - minVal));
+				}
+			}
+			continue;
+		}
+
+		if (name.contains("osc 1 vol") || name.contains("osc 1 volume") || name.contains("osc 1 level") || name.contains("osc1 vol") || name.contains("osc1 level"))
+		{
+			if (auto fm = m->dynamicCast<FloatModel>())
+			{
+				float minVal = fm->minValue();
+				float maxVal = fm->maxValue();
+				if (std::isfinite(minVal) && std::isfinite(maxVal) && maxVal > minVal)
+				{
+					// Keep osc 1 volume at least 50%
+					float r = 0.5f + 0.5f * (static_cast<float>(rand()) / static_cast<float>(RAND_MAX));
+					fm->setValue(minVal + r * (maxVal - minVal));
+				}
+			}
+			continue;
+		}
+
+		if (auto fm = m->dynamicCast<FloatModel>())
+		{
+			float minVal = fm->minValue();
+			float maxVal = fm->maxValue();
+			if (std::isfinite(minVal) && std::isfinite(maxVal) && maxVal > minVal)
+			{
+				float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+				fm->setValue(minVal + r * (maxVal - minVal));
+			}
+		}
+		else if (auto im = m->dynamicCast<IntModel>())
+		{
+			int minVal = im->minValue();
+			int maxVal = im->maxValue();
+			if (maxVal > minVal && (maxVal - minVal) <= 64)
+			{
+				im->setValue(minVal + (rand() % (maxVal - minVal + 1)));
+			}
+		}
+		else if (auto bm = m->dynamicCast<BoolModel>())
+		{
+			bm->setValue((rand() % 2) == 1);
+		}
+	}
+
+	if (audioBusHandle() && audioBusHandle()->effects())
+	{
+		for (Effect* e : audioBusHandle()->effects()->effects())
+		{
+			if (!e) { continue; }
+			const auto fxModels = e->findChildren<AutomatableModel*>();
+			for (auto* fm_obj : fxModels)
+			{
+				if (auto fm = fm_obj->dynamicCast<FloatModel>())
+				{
+					float minVal = fm->minValue();
+					float maxVal = fm->maxValue();
+					if (std::isfinite(minVal) && std::isfinite(maxVal) && maxVal > minVal)
+					{
+						float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+						fm->setValue(minVal + r * (maxVal - minVal));
+					}
+				}
+			}
+		}
+	}
+
+	// Invariant: Guarantee instruments are audible, never left muted or soloed
+	m_mutedModel.setValue(false);
+	setMuted(false);
+	m_soloModel.setValue(false);
+
+	if (m_instrument)
+	{
+		m_instrument->randomize();
+	}
+
+	if (Engine::getSong())
+	{
+		Engine::getSong()->setModified();
 	}
 }
 

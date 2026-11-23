@@ -86,7 +86,7 @@ SlicerTWaveform::SlicerTWaveform(int totalWidth, int totalHeight, SlicerT* instr
 	m_seekerWaveform.fill(s_waveformSeekerBgColor);
 	m_editorWaveform.fill(s_waveformEditorBgColor);
 
-	connect(instrument, &SlicerT::isPlaying, this, &SlicerTWaveform::isPlaying);
+	connect(instrument, &SlicerT::isPlaying, this, &SlicerTWaveform::isPlaying, Qt::QueuedConnection);
 	connect(instrument, &SlicerT::dataChanged, this, &SlicerTWaveform::updateUI);
 
 	m_emptySampleIcon = m_emptySampleIcon.createMaskFromColor(QColor(255, 255, 255), Qt::MaskMode::MaskOutColor);

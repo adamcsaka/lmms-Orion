@@ -34,6 +34,7 @@
 
 #include "AutomationClip.h"
 #include "AutomationTrack.h"
+#include "Clip.h"
 #include "ConfigManager.h"
 #include "Engine.h"
 #include "InstrumentTrack.h"
@@ -138,8 +139,24 @@ Track* Track::clone()
 	// Save track to temporary XML and load it to create a new identical track
 	QDomDocument doc;
 	QDomElement parent = doc.createElement("clonedtrack");
-	cloneState(doc, parent);
-	Track* t = create(parent.firstChild().toElement(), m_trackContainer);
+	QDomElement trackElement = doc.createElement("track");
+	parent.appendChild(trackElement);
+	saveSettings(doc, trackElement);
+	JournallingObject::replaceJournalIDs(parent);
+
+	Track* t = create(trackElement, m_trackContainer);
+
+	if (t && m_trackContainer == Engine::patternStore())
+	{
+		// Ensure all pattern clips are copied identically with their notes and steps
+		for (int p = 0; p < numOfClips(); ++p)
+		{
+			if (p < t->numOfClips() && getClip(p) && t->getClip(p))
+			{
+				Clip::copyStateTo(getClip(p), t->getClip(p));
+			}
+		}
+	}
 
 	AutomationClip::resolveAllIDs();
 	return t;

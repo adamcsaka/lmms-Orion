@@ -37,6 +37,7 @@
 
 #include "AboutDialog.h"
 #include "AutomationEditor.h"
+#include "Controller.h"
 #include "ControllerRackView.h"
 #include "DeprecationHelper.h"
 #include "embed.h"
@@ -53,6 +54,7 @@
 #include "MicrotunerConfig.h"
 #include "PathUtil.h"
 #include "PatternEditor.h"
+#include "PatternStore.h"
 #include "PianoRoll.h"
 #include "PianoView.h"
 #include "PluginBrowser.h"
@@ -66,6 +68,8 @@
 #include "SetupDialog.h"
 #include "SideBar.h"
 #include "SongEditor.h"
+#include "ThemeManager.h"
+#include "ThemeDialog.h"
 #include "SubWindow.h"
 #include "TemplatesMenu.h"
 #include "TextFloat.h"
@@ -336,6 +340,8 @@ void MainWindow::finalize()
 	m_redoAction->setShortcutContext(Qt::ApplicationShortcut);
 
 	edit_menu->addSeparator();
+	edit_menu->addAction(embed::getIconPixmap("colorize"), tr("Theme & Appearance..."),
+		this, SLOT(showThemeDialog()), keySequence(Qt::CTRL, Qt::Key_8));
 	edit_menu->addAction(embed::getIconPixmap("microtuner"), tr("Scales and keymaps"),
 		this, SLOT(toggleMicrotunerWin()));
 	edit_menu->addAction(embed::getIconPixmap("setup_general"), tr("Settings"),
@@ -465,6 +471,11 @@ void MainWindow::finalize()
 	m_toolBarLayout->addWidget( mixer_window, 1, 5 );
 	m_toolBarLayout->addWidget( controllers_window, 1, 6 );
 	m_toolBarLayout->addWidget( project_notes_window, 1, 7 );
+
+	auto theme_window = new ToolButton(embed::getIconPixmap("colorize"),
+		tr("Theme & Appearance") + " (Ctrl+8)", this, SLOT(showThemeDialog()), m_toolBar);
+	theme_window->setShortcut(keySequence(Qt::CTRL, Qt::Key_8));
+	m_toolBarLayout->addWidget( theme_window, 1, 8 );
 	m_toolBarLayout->setColumnStretch( 100, 1 );
 
 	// setup-dialog opened before?
@@ -508,6 +519,8 @@ void MainWindow::finalize()
 	{
 		connect( subWindow, SIGNAL(windowStateChanged(Qt::WindowStates,Qt::WindowStates)), this, SLOT(resetWindowTitle()));
 	}
+
+	ThemeManager::inst()->applyTheme(ThemeManager::inst()->currentTheme(), false);
 }
 
 
@@ -1365,7 +1378,15 @@ void MainWindow::keyReleaseEvent( QKeyEvent * _ke )
 
 void MainWindow::timerEvent( QTimerEvent * _te)
 {
-	emit periodicUpdate();
+	if( _te->timerId() == m_updateTimer.timerId() )
+	{
+		Controller::updateGuiControllers();
+		emit periodicUpdate();
+	}
+	else
+	{
+		QMainWindow::timerEvent( _te );
+	}
 }
 
 
@@ -1456,6 +1477,12 @@ void MainWindow::onExportProjectMidi()
 	}
 }
 
+void MainWindow::exportPattern()
+{
+	Engine::getSong()->setExportPlayMode(Song::PlayMode::Pattern);
+	exportProject(false);
+}
+
 void MainWindow::exportProject(bool multiExport)
 {
 	QString const & projectFileName = Engine::getSong()->projectFileName();
@@ -1495,8 +1522,16 @@ void MainWindow::exportProject(bool multiExport)
 			efd.setDirectory( ConfigManager::inst()->userProjectsDir() );
 			baseFilename = tr( "untitled" );
 		}
+		if (Engine::getSong()->exportPlayMode() == Song::PlayMode::Pattern)
+		{
+			baseFilename += QString("_pattern_%1").arg(Engine::patternStore()->currentPattern() + 1);
+			efd.setWindowTitle( tr( "Select file for pattern-export..." ) );
+		}
+		else
+		{
+			efd.setWindowTitle( tr( "Select file for project-export..." ) );
+		}
 		efd.selectFile( baseFilename + ProjectRenderer::fileEncodeDevices[0].m_extension );
-		efd.setWindowTitle( tr( "Select file for project-export..." ) );
 	}
 
 	QString suffix = "wav";
@@ -1699,5 +1734,29 @@ void MainWindow::MovableQMdiArea::mouseReleaseEvent(QMouseEvent* event)
 	setCursor(Qt::ArrowCursor);
 	m_isBeingMoved = false;
 }
+
+
+void MainWindow::setWorkspaceBackground(const QString & filePath)
+{
+	if (!m_workspace) return;
+	if (!filePath.isEmpty() && QFile::exists(filePath))
+	{
+		QImage backgroundPic(filePath);
+		if (!backgroundPic.isNull())
+		{
+			m_workspace->setBackground(backgroundPic);
+			return;
+		}
+	}
+	m_workspace->setBackground(Qt::NoBrush);
+}
+
+
+void MainWindow::showThemeDialog()
+{
+	ThemeDialog dlg(this);
+	dlg.exec();
+}
+
 
 } // namespace lmms::gui

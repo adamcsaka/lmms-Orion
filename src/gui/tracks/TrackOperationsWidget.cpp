@@ -39,11 +39,13 @@
 #include "ConfigManager.h"
 #include "embed.h"
 #include "Engine.h"
+#include "InstrumentTrack.h"
 #include "InstrumentTrackView.h"
 #include "lmms_math.h"
 #include "KeyboardShortcuts.h"
 #include "Song.h"
 #include "StringPairDrag.h"
+#include "TextFloat.h"
 #include "Track.h"
 #include "TrackContainerView.h"
 #include "TrackGrip.h"
@@ -176,6 +178,9 @@ void TrackOperationsWidget::cloneTrack()
 		// if this track was solo, make the new track the new solo
 		newTrack->toggleSolo();
 	}
+
+	newTrackView->update();
+	tcView->update();
 }
 
 
@@ -263,6 +268,9 @@ void TrackOperationsWidget::updateMenu()
 	if (auto trackView = dynamic_cast<InstrumentTrackView*>(m_trackView))
 	{
 		toMenu->addSeparator();
+		toMenu->addAction( embed::getIconPixmap( "random_wave_active", 16, 16 ),
+						tr( "Randomize this instrument" ),
+						this, SLOT(randomizeInstrument()));
 		toMenu->addMenu(trackView->midiMenu());
 	}
 	if( dynamic_cast<AutomationTrackView *>( m_trackView ) )
@@ -307,6 +315,21 @@ void TrackOperationsWidget::recordingOn()
 void TrackOperationsWidget::recordingOff()
 {
 	toggleRecording( false );
+}
+
+
+void TrackOperationsWidget::randomizeInstrument()
+{
+	if (auto it = dynamic_cast<InstrumentTrack*>(m_trackView->model()))
+	{
+		it->randomizeParameters();
+		TextFloat::displayMessage(
+			tr("Instrument Randomized"),
+			tr("Randomized parameters for %1!").arg(it->name()),
+			embed::getIconPixmap("random_wave_active"),
+			2500
+		);
+	}
 }
 
 

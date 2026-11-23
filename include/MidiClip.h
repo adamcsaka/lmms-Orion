@@ -130,7 +130,11 @@ public slots:
 	void cloneSteps();
 	void removeSteps();
 	void setSteps( int newSteps );
+	void setFractionalSteps( float steps );
 	int steps() const { return m_steps; }
+	float fractionalSteps() const { return m_fractionalSteps > 0.0f ? m_fractionalSteps : static_cast<float>(m_steps); }
+	void duplicateContent();
+	void scaleContent( float percentage );
 	void clear();
 
 protected:
@@ -156,6 +160,8 @@ private:
 	// data-stuff
 	NoteVector m_notes;
 	int m_steps;
+	float m_fractionalSteps = 0.0f;
+	float m_userSteps = 0.0f;
 
 	MidiClip * adjacentMidiClipByOffset(int offset) const;
 

@@ -42,6 +42,7 @@ SET(LMMS_SRCS
 	gui/SideBarWidget.cpp
 	gui/StringPairDrag.cpp
 	gui/SubWindow.cpp
+	gui/ThemeManager.cpp
 	gui/ToolPluginView.cpp
 
 	gui/clips/AutomationClipView.cpp
@@ -84,6 +85,7 @@ SET(LMMS_SRCS
 	gui/modals/FileDialog.cpp
 	gui/modals/RenameDialog.cpp
 	gui/modals/SetupDialog.cpp
+	gui/modals/ThemeDialog.cpp
 	gui/modals/VersionedSaveDialog.cpp
 
 	gui/tracks/AutomationTrackView.cpp

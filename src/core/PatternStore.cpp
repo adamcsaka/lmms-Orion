@@ -25,6 +25,10 @@
 
 #include "PatternStore.h"
 
+#include <numeric>
+#include "AutomatableModel.h"
+#include "AutomationClip.h"
+#include "AutomationTrack.h"
 #include "Clip.h"
 #include "Engine.h"
 #include "PatternTrack.h"
@@ -39,6 +43,10 @@ PatternStore::PatternStore() :
 	m_patternComboBoxModel(this)
 {
 	setType(Type::Pattern);
+	m_automationIdleTimer.setSingleShot(true);
+	connect(&m_automationIdleTimer, &QTimer::timeout, this, [this]() {
+		setRecordingAutomation(false);
+	});
 }
 
 
@@ -52,8 +60,6 @@ bool PatternStore::play(TimePos start, f_cnt_t frames, f_cnt_t offset, int clipN
 	{
 		return false;
 	}
-
-	start = start % (lengthOfPattern(clipNum) * TimePos::ticksPerBar());
 
 	const TrackList& tl = tracks();
 	for (Track * t : tl)
@@ -83,20 +89,29 @@ void PatternStore::updateAfterTrackAdd()
 
 bar_t PatternStore::lengthOfPattern(int pattern) const
 {
-	TimePos maxLength = TimePos::ticksPerBar();
+	tick_t maxTicks = TimePos::ticksPerBar();
+	tick_t polyTicks = TimePos::ticksPerBar();
 
 	const TrackList & tl = tracks();
 	for (Track * t : tl)
 	{
-		// Don't create Clips here if they don't exist, and only takes into account MIDI clips
-		// because the length of Automation / Sample clips is defined based on this method's output.
-		if (pattern < t->numOfClips() && t->type() == Track::Type::Instrument)
+		if (pattern < t->numOfClips())
 		{
-			maxLength = std::max(maxLength, t->getClip(pattern)->length());
+			auto c = t->getClip(pattern);
+			if (c && c->length() > 0)
+			{
+				maxTicks = std::max(maxTicks, static_cast<tick_t>(c->length()));
+				polyTicks = std::lcm(polyTicks, static_cast<tick_t>(c->length()));
+				if (polyTicks > 32 * TimePos::ticksPerBar())
+				{
+					polyTicks = std::max(maxTicks, static_cast<tick_t>(32 * TimePos::ticksPerBar()));
+					break;
+				}
+			}
 		}
 	}
 
-	return maxLength.nextFullBar();
+	return TimePos(polyTicks).nextFullBar();
 }
 
 
@@ -217,17 +232,113 @@ void PatternStore::createClipsForPattern(int pattern)
 	}
 }
 
+void PatternStore::setRecordingAutomation(bool record)
+{
+	if (m_recordAutomation != record)
+	{
+		m_recordAutomation = record;
+		if (!m_recordAutomation)
+		{
+			m_automationIdleTimer.stop();
+		}
+		emit recordingAutomationChanged(m_recordAutomation);
+	}
+}
+
+void PatternStore::handleLiveAutomation(AutomatableModel* model)
+{
+	if (!m_recordAutomation || !model || !Engine::getSong() || !Engine::getSong()->isPlaying())
+	{
+		return;
+	}
+
+	const int curPat = currentPattern();
+	if (curPat < 0) { return; }
+
+	// Look for existing AutomationClip in currentPattern controlling this model
+	AutomationClip* targetClip = nullptr;
+	bool isNewClip = false;
+	for (Track* t : tracks())
+	{
+		if (t->type() == Track::Type::Automation && curPat < t->numOfClips())
+		{
+			auto ac = dynamic_cast<AutomationClip*>(t->getClip(curPat));
+			if (ac)
+			{
+				const auto& objs = ac->objects();
+				if (std::find(objs.begin(), objs.end(), model) != objs.end())
+				{
+					targetClip = ac;
+					break;
+				}
+			}
+		}
+	}
+
+	// If not found, create a new AutomationTrack in PatternStore
+	if (!targetClip)
+	{
+		auto track = dynamic_cast<AutomationTrack*>(Track::create(Track::Type::Automation, this));
+		if (track)
+		{
+			track->setName(model->fullDisplayName());
+			if (curPat < track->numOfClips())
+			{
+				targetClip = dynamic_cast<AutomationClip*>(track->getClip(curPat));
+			}
+			if (targetClip)
+			{
+				targetClip->addObject(model);
+				isNewClip = true;
+			}
+		}
+	}
+
+	if (targetClip)
+	{
+		// Ensure recorded automation uses smooth Linear curves instead of blocky/stepped Discrete mode
+		if (targetClip->progressionType() == AutomationClip::ProgressionType::Discrete)
+		{
+			targetClip->setProgressionType(AutomationClip::ProgressionType::Linear);
+		}
+
+		TimePos curPos = Engine::getSong()->getPlayPos(Song::PlayMode::Pattern);
+		const tick_t patLenTicks = std::max(TimePos::ticksPerBar(), static_cast<tick_t>(lengthOfCurrentPattern() * DefaultTicksPerBar));
+		curPos = TimePos(curPos.getTicks() % patLenTicks);
+
+		const bool activeDrag = model->isBeingManipulated();
+
+		if (isNewClip && targetClip->steps() == 0)
+		{
+			targetClip->setSteps(TimePos::stepsPerBar());
+		}
+
+		targetClip->recordValue(curPos, model->inverseScaledValue(model->value<float>()));
+
+		// Dynamically size clip step count to fit recorded automation nodes (like piano roll)
+		const tick_t maxRecordedTick = curPos.getTicks();
+		const int stepsNeeded = static_cast<int>((maxRecordedTick / (DefaultTicksPerBar / 16)) + 1);
+		if (stepsNeeded > targetClip->steps())
+		{
+			targetClip->setSteps(stepsNeeded);
+		}
+
+		emit targetClip->dataChanged();
+
+		if (m_recordMode == RecordMode::Touch)
+		{
+			m_automationIdleTimer.start(4000);
+		}
+	}
+}
+
+
+
+
 AutomatedValueMap PatternStore::automatedValuesAt(TimePos time, int clipNum) const
 {
 	Q_ASSERT(clipNum >= 0);
 	Q_ASSERT(time.getTicks() >= 0);
-
-	auto lengthBars = lengthOfPattern(clipNum);
-	auto lengthTicks = lengthBars * TimePos::ticksPerBar();
-	if (time > lengthTicks)
-	{
-		time = lengthTicks;
-	}
 
 	return TrackContainer::automatedValuesAt(time + (TimePos::ticksPerBar() * clipNum), clipNum);
 }

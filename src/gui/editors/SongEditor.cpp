@@ -28,12 +28,15 @@
 
 #include <QAction>
 #include <QKeyEvent>
+#include <QInputDialog>
 #include <QLabel>
 #include <QMdiArea>
 #include <QScrollBar>
 #include <QSlider>
 #include <QTimeLine>
+#include <QToolButton>
 
+#include "RandomInstrumentationDialog.h"
 #include "ActionGroup.h"
 #include "AudioDevice.h"
 #include "AudioEngine.h"
@@ -57,6 +60,13 @@
 #include "TimeDisplayWidget.h"
 #include "TimeLineWidget.h"
 #include "TrackView.h"
+#include "InstrumentTrack.h"
+#include "AudioBusHandle.h"
+#include "Effect.h"
+#include "EffectChain.h"
+#include "PatternStore.h"
+#include <cmath>
+#include <cstdlib>
 
 namespace lmms::gui
 {
@@ -64,9 +74,9 @@ namespace lmms::gui
 namespace
 {
 
-constexpr int MIN_PIXELS_PER_BAR = 4;
-constexpr int MAX_PIXELS_PER_BAR = 400;
-constexpr int ZOOM_STEPS = 200;
+constexpr int MIN_PIXELS_PER_BAR = 1;
+constexpr int MAX_PIXELS_PER_BAR = 1000;
+constexpr int ZOOM_STEPS = 500;
 
 constexpr std::array SNAP_SIZES{8.f, 4.f, 2.f, 1.f, 1/2.f, 1/4.f, 1/8.f, 1/16.f};
 constexpr std::array PROPORTIONAL_SNAP_SIZES{64.f, 32.f, 16.f, 8.f, 4.f, 2.f, 1.f, 1/2.f, 1/4.f, 1/8.f, 1/16.f, 1/32.f, 1/64.f};
@@ -531,8 +541,9 @@ void SongEditor::keyPressEvent( QKeyEvent * ke )
 
 void SongEditor::adjustLeftRightScoll(int value)
 {
+	float scrollFactor = std::clamp(static_cast<float>(DEFAULT_PIXELS_PER_BAR) / pixelsPerBar(), 0.25f, 4.0f);
 	m_leftRightScroll->setValue(m_leftRightScroll->value()
-						- value * DEFAULT_PIXELS_PER_BAR / pixelsPerBar());
+						- static_cast<int>(value * 0.5f * scrollFactor));
 }
 
 
@@ -545,8 +556,8 @@ void SongEditor::wheelEvent( QWheelEvent * we )
 		// tick based on the mouse x-position where the scroll wheel was used
 		int tick = x / pixelsPerBar() * TimePos::ticksPerBar();
 
-		// move zoom slider (pixelsPerBar will change automatically)
-		int step = we->modifiers() & Qt::ShiftModifier ? 1 : 5;
+		// move zoom slider (pixelsPerBar will change automatically) with fine precision
+		int step = we->modifiers() & Qt::ShiftModifier ? 1 : 2;
 		// when Alt is pressed, wheelEvent returns delta for x coordinate (mimics horizontal mouse wheel)
 		int direction = (we->angleDelta().y() + we->angleDelta().x()) > 0 ? 1 : -1;
 		m_zoomingModel->incValue(step * direction);
@@ -676,7 +687,7 @@ void SongEditor::hideMasterVolumeFloat( void )
 void SongEditor::setMasterPitch( int new_val )
 {
 	updateMasterPitchFloat( new_val );
-	if( m_mpsStatus->isVisible() == false && m_song->m_loadingProject == false
+	if( m_mpsStatus && m_mpsStatus->isVisible() == false && m_song->m_loadingProject == false
 					&& m_masterPitchSlider->showStatus() )
 	{
 		m_mpsStatus->moveGlobal( m_masterPitchSlider,
@@ -690,10 +701,13 @@ void SongEditor::setMasterPitch( int new_val )
 
 void SongEditor::showMasterPitchFloat( void )
 {
-	m_mpsStatus->moveGlobal( m_masterPitchSlider,
-			QPoint( m_masterPitchSlider->width() + 2, -2 ) );
-	m_mpsStatus->show();
-	updateMasterPitchFloat( m_song->m_masterPitchModel.value() );
+	if( m_mpsStatus )
+	{
+		m_mpsStatus->moveGlobal( m_masterPitchSlider,
+				QPoint( m_masterPitchSlider->width() + 2, -2 ) );
+		m_mpsStatus->show();
+		updateMasterPitchFloat( m_song->m_masterPitchModel.value() );
+	}
 }
 
 
@@ -701,8 +715,10 @@ void SongEditor::showMasterPitchFloat( void )
 
 void SongEditor::updateMasterPitchFloat( int new_val )
 {
-	m_mpsStatus->setText( tr( "Value: %1 keys").arg( new_val ) );
-
+	if( m_mpsStatus )
+	{
+		m_mpsStatus->setText( tr( "Value: %1 keys").arg( new_val ) );
+	}
 }
 
 
@@ -955,6 +971,56 @@ SongEditorWindow::SongEditorWindow(Song* song) :
 	trackActionsToolBar->addAction( m_addPatternTrackAction );
 	trackActionsToolBar->addAction( m_addSampleTrackAction );
 	trackActionsToolBar->addAction( m_addAutomationTrackAction );
+
+	auto cleanAutoAction = trackActionsToolBar->addAction(
+		embed::getIconPixmap("edit_delete"), tr("Remove unused automation tracks"));
+	connect(cleanAutoAction, &QAction::triggered, [this]() {
+		int count = m_editor->m_song->removeUnusedAutomationTracks();
+		TextFloat::displayMessage(tr("Cleaned Automation"), tr("Removed %1 unused automation track(s) from Song Editor.").arg(count), embed::getIconPixmap("edit_delete"), 2500);
+	});
+
+	trackActionsToolBar->addSeparator();
+
+	auto genRandomBtn = new QToolButton(trackActionsToolBar);
+	genRandomBtn->setText(tr("Random Synths..."));
+	genRandomBtn->setIcon(embed::getIconPixmap("arp_random"));
+	genRandomBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+	genRandomBtn->setToolTip(tr("Generate randomized synth instrument tracks with specified instrument & effect count"));
+	connect(genRandomBtn, &QToolButton::clicked, [this]() {
+		RandomInstrumentationDialog dlg(this);
+		if (dlg.exec() == QDialog::Accepted)
+		{
+			generateRandomInstrumentation(m_editor->m_song, dlg.instrumentCount(), dlg.effectCount(), dlg.polyphonyCount());
+		}
+	});
+	trackActionsToolBar->addWidget(genRandomBtn);
+
+	auto randomizeAllBtn = new QToolButton(trackActionsToolBar);
+	randomizeAllBtn->setText(tr("Randomize All"));
+	randomizeAllBtn->setIcon(embed::getIconPixmap("random_wave_active"));
+	randomizeAllBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+	randomizeAllBtn->setToolTip(tr("Randomize knobs, sliders, and synth parameters across all instruments"));
+	connect(randomizeAllBtn, &QToolButton::clicked, [this]() {
+		auto randomizeTrackList = [](const TrackContainer::TrackList& tl) {
+			for (Track* t : tl)
+			{
+				auto it = dynamic_cast<InstrumentTrack*>(t);
+				if (!it) { continue; }
+				it->randomizeParameters(false);
+			}
+		};
+
+		randomizeTrackList(m_editor->m_song->tracks());
+		randomizeTrackList(Engine::patternStore()->tracks());
+
+		TextFloat::displayMessage(
+			tr("Instruments Randomized"),
+			tr("Randomized knobs, sliders, and synth parameters across all instruments!"),
+			embed::getIconPixmap("random_wave_active"),
+			2500
+		);
+	});
+	trackActionsToolBar->addWidget(randomizeAllBtn);
 
 
 	// Edit actions

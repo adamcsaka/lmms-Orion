@@ -67,6 +67,7 @@ public:
 
 
 	void cloneState( QDomDocument & _doc, QDomElement & _parent );
+	static void replaceJournalIDs(QDomElement current);
 
 	inline bool isJournalling() const
 	{
@@ -100,8 +101,6 @@ private:
 	bool m_journalling;
 
 	QStack<bool> m_journallingStateStack;
-
-	static void replaceJournalIDs(QDomElement current);
 } ;
 
 

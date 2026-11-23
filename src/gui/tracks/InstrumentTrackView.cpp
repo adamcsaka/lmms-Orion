@@ -300,6 +300,8 @@ void InstrumentTrackView::onInstrumentChanged()
 {
 	// Check if an instrument has been loaded, if not disable the track label button to prevent opening an empty instrument window.
 	m_tlb->setEnabled(model()->m_instrument != nullptr);
+	m_tlb->setIcon(determinePixmap(model()));
+	m_tlb->update();
 }
 
 

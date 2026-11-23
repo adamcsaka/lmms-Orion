@@ -119,6 +119,21 @@ void consoleMessageHandler(QtMsgType type,
     QByteArray localMsg = msg.toLocal8Bit();
     fprintf(stderr, "%s\n", localMsg.constData());
 }
+
+static LONG WINAPI lmmsUnhandledExceptionFilter(EXCEPTION_POINTERS* ep)
+{
+	DWORD code = (ep && ep->ExceptionRecord) ? ep->ExceptionRecord->ExceptionCode : 0;
+	void* addr = (ep && ep->ExceptionRecord) ? ep->ExceptionRecord->ExceptionAddress : nullptr;
+	wchar_t msg[512];
+	swprintf_s(msg, 512,
+		L"LMMS Orion encountered an unhandled exception and had to terminate.\n\n"
+		L"Exception code: 0x%08X\n"
+		L"Fault address: %p\n\n"
+		L"The crash has been recorded in the Windows Event Log.",
+		code, addr);
+	MessageBoxW(nullptr, msg, L"LMMS Orion - Crash Handler", MB_OK | MB_ICONERROR | MB_TASKMODAL);
+	return EXCEPTION_CONTINUE_SEARCH;
+}
 #endif // LMMS_BUILD_WIN32
 
 
@@ -333,6 +348,7 @@ int main( int argc, char * * argv )
 	}
 	// Make Qt's debug message handlers work
 	qInstallMessageHandler(consoleMessageHandler);
+	SetUnhandledExceptionFilter(lmmsUnhandledExceptionFilter);
 #endif
 
 #if defined(LMMS_HAVE_SYS_PRCTL_H) && defined(PR_SET_CHILD_SUBREAPER)

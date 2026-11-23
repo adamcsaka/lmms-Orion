@@ -57,6 +57,7 @@ protected slots:
 	void openInPatternEditor();
 	void resetName();
 	void changeName();
+	void explodePatternIntoSong();
 
 
 protected:

@@ -264,6 +264,18 @@ public:
 	void setThemeDir(const QString & themeDir);
 	void setBackgroundPicFile(const QString & backgroundPicFile);
 
+	bool applyProjectThemes() const
+	{
+		QString val = value("ui", "applyprojectthemes");
+		if (val.isEmpty()) return true;
+		return val.toInt() != 0;
+	}
+
+	void setApplyProjectThemes(bool enable)
+	{
+		setValue("ui", "applyprojectthemes", QString::number(enable ? 1 : 0));
+	}
+
 	// Creates the working directory & subdirectories on disk.
 	void createWorkingDir();
 

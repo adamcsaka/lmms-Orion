@@ -36,6 +36,8 @@
 #include <QPixmap>
 #include <QStyleOptionFrame>
 #include <QVBoxLayout>
+#include <QGuiApplication>
+#include <QScreen>
 
 #include "CaptionMenu.h"
 #include "DeprecationHelper.h"
@@ -174,6 +176,26 @@ void LcdFloatSpinBox::mouseMoveEvent(QMouseEvent* event)
 			model()->setValue(model()->value() - dy / 2 * getStep());
 			emit manualChange();
 			m_origMousePos = globalPos;
+		}
+
+		// Infinite drag screen-wrapping: wrap across monitor top/bottom edges
+		QScreen* screen = QGuiApplication::screenAt(globalPos);
+		if (!screen) { screen = QGuiApplication::primaryScreen(); }
+		if (screen)
+		{
+			const QRect geom = screen->geometry();
+			if (globalPos.y() <= geom.top() + 4)
+			{
+				const QPoint newPos(globalPos.x(), geom.bottom() - 10);
+				QCursor::setPos(newPos);
+				m_origMousePos = newPos;
+			}
+			else if (globalPos.y() >= geom.bottom() - 4)
+			{
+				const QPoint newPos(globalPos.x(), geom.top() + 10);
+				QCursor::setPos(newPos);
+				m_origMousePos = newPos;
+			}
 		}
 	}
 }

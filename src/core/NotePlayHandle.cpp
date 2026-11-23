@@ -65,6 +65,7 @@ NotePlayHandle::NotePlayHandle( InstrumentTrack* instrumentTrack,
 	m_releaseFramesDone( 0 ),
 	m_subNotes(),
 	m_released( false ),
+	m_forceFinished( false ),
 	m_releaseStarted( false ),
 	m_hasMidiNote( false ),
 	m_hasParent( parent != nullptr  ),
@@ -73,12 +74,12 @@ NotePlayHandle::NotePlayHandle( InstrumentTrack* instrumentTrack,
 	m_muted( false ),
 	m_patternTrack( nullptr ),
 	m_origTempo( Engine::getSong()->getTempo() ),
-	m_origBaseNote( instrumentTrack->baseNote() ),
+	m_origBaseNote( instrumentTrack ? instrumentTrack->baseNote() : DefaultKey ),
 	m_frequency( 0 ),
 	m_unpitchedFrequency( 0 ),
 	m_baseDetuning( nullptr ),
 	m_songGlobalParentOffset( 0 ),
-	m_midiChannel( midiEventChannel >= 0 ? midiEventChannel : instrumentTrack->midiPort()->realOutputChannel() ),
+	m_midiChannel( midiEventChannel >= 0 ? midiEventChannel : (instrumentTrack && instrumentTrack->midiPort() ? instrumentTrack->midiPort()->realOutputChannel() : 0) ),
 	m_origin( origin ),
 	m_frequencyNeedsUpdate( false )
 {
@@ -86,7 +87,11 @@ NotePlayHandle::NotePlayHandle( InstrumentTrack* instrumentTrack,
 	if( hasParent() == false )
 	{
 		m_baseDetuning = new BaseDetuning(detuning().get());
-		m_instrumentTrack->m_processHandles.push_back( this );
+		if (m_instrumentTrack)
+		{
+			m_instrumentTrack->m_processHandles.push_back( this );
+			m_instrumentTrack->enforcePolyphonyLimit( m_instrumentTrack->maxPolyphony() );
+		}
 	}
 	else
 	{
@@ -105,17 +110,20 @@ NotePlayHandle::NotePlayHandle( InstrumentTrack* instrumentTrack,
 	setFrames( _frames );
 
 	// inform attached components about new MIDI note (used for recording in Piano Roll)
-	if( m_origin == Origin::MidiInput )
+	if( m_origin == Origin::MidiInput && m_instrumentTrack )
 	{
 		m_instrumentTrack->midiNoteOn( *this );
 	}
 
-	if (m_instrumentTrack->instrument() && m_instrumentTrack->instrument()->isSingleStreamed())
+	if (m_instrumentTrack && m_instrumentTrack->instrument() && m_instrumentTrack->instrument()->isSingleStreamed())
 	{
 		setUsesBuffer( false );
 	}
 
-	setAudioBusHandle(instrumentTrack->audioBusHandle());
+	if (instrumentTrack)
+	{
+		setAudioBusHandle(instrumentTrack->audioBusHandle());
+	}
 
 	unlock();
 }
@@ -129,19 +137,22 @@ NotePlayHandle::~NotePlayHandle()
 	if( hasParent() == false )
 	{
 		delete m_baseDetuning;
-		m_instrumentTrack->m_processHandles.removeAll( this );
+		if( m_instrumentTrack )
+		{
+			m_instrumentTrack->m_processHandles.removeAll( this );
+		}
 	}
-	else
+	else if( m_parent )
 	{
 		m_parent->m_subNotes.removeOne( this );
 	}
 
-	if( m_pluginData != nullptr )
+	if( m_pluginData != nullptr && m_instrumentTrack )
 	{
 		m_instrumentTrack->deleteNotePluginData( this );
 	}
 
-	if( m_instrumentTrack->m_notes[key()] == this )
+	if( m_instrumentTrack && m_instrumentTrack->m_notes[key()] == this )
 	{
 		m_instrumentTrack->m_notes[key()] = nullptr;
 	}
@@ -159,6 +170,8 @@ NotePlayHandle::~NotePlayHandle()
 void NotePlayHandle::setVolume( volume_t _volume )
 {
 	Note::setVolume( _volume );
+
+	if (!m_instrumentTrack || !m_instrumentTrack->midiPort()) { return; }
 
 	const int baseVelocity = m_instrumentTrack->midiPort()->baseVelocity();
 
@@ -178,6 +191,7 @@ void NotePlayHandle::setPanning( panning_t panning )
 
 int NotePlayHandle::midiKey() const
 {
+	if (!instrumentTrack()) { return key(); }
 	return key() - m_origBaseNote + instrumentTrack()->baseNote();
 }
 
@@ -186,7 +200,7 @@ int NotePlayHandle::midiKey() const
 
 void NotePlayHandle::play( SampleFrame* _working_buffer )
 {
-	if (m_muted)
+	if (m_muted || !m_instrumentTrack)
 	{
 		return;
 	}
@@ -199,6 +213,12 @@ void NotePlayHandle::play( SampleFrame* _working_buffer )
 	}
 
 	lock();
+
+	if( m_forceFinished )
+	{
+		unlock();
+		return;
+	}
 
 	// Don't play the note if it falls outside of the user defined key range
 	// TODO: handle the range check by Microtuner, and if the key becomes "not mapped", save the current frequency
@@ -250,9 +270,16 @@ void NotePlayHandle::play( SampleFrame* _working_buffer )
 		instrumentTrack()->isSustainPedalPressed() == false &&
 		m_totalFramesPlayed + framesThisPeriod > m_frames )
 	{
-		noteOff( m_totalFramesPlayed == 0
-			? ( m_frames + offset() ) // if we have noteon and noteoff during the same period, take offset in account for release frame
-			: ( m_frames - m_totalFramesPlayed ) ); // otherwise, the offset is already negated and can be ignored
+		f_cnt_t relOffset = 0;
+		if( m_totalFramesPlayed == 0 )
+		{
+			relOffset = m_frames + offset();
+		}
+		else if( m_frames > m_totalFramesPlayed )
+		{
+			relOffset = m_frames - m_totalFramesPlayed;
+		}
+		noteOff( relOffset );
 	}
 
 	// under some circumstances we're called even if there's nothing to play
@@ -330,6 +357,10 @@ void NotePlayHandle::play( SampleFrame* _working_buffer )
 
 f_cnt_t NotePlayHandle::framesLeft() const
 {
+	if( m_forceFinished || !instrumentTrack() )
+	{
+		return 0;
+	}
 	if( instrumentTrack()->isSustainPedalPressed() )
 	{
 		return 4 * Engine::audioEngine()->framesPerPeriod();
@@ -340,9 +371,11 @@ f_cnt_t NotePlayHandle::framesLeft() const
 	}
 	else if( m_released )
 	{
-		return m_framesBeforeRelease + m_releaseFramesToDo - m_releaseFramesDone;
+		const f_cnt_t totalRelease = m_framesBeforeRelease + m_releaseFramesToDo;
+		return ( m_releaseFramesDone >= totalRelease ) ? 0 : ( totalRelease - m_releaseFramesDone );
 	}
-	return m_frames+actualReleaseFramesToDo()-m_totalFramesPlayed;
+	const f_cnt_t total = m_frames + actualReleaseFramesToDo();
+	return ( m_totalFramesPlayed >= total ) ? 0 : ( total - m_totalFramesPlayed );
 }
 
 
@@ -368,6 +401,51 @@ bool NotePlayHandle::isFromTrack( const Track * _track ) const
 
 
 
+void NotePlayHandle::forceFinish()
+{
+	lock();
+	m_forceFinished = true;
+	m_released = true;
+	m_framesBeforeRelease = 0;
+	m_releaseFramesToDo = 0;
+	m_releaseFramesDone = 0;
+
+	if( m_hasMidiNote )
+	{
+		m_hasMidiNote = false;
+
+		// send MidiNoteOff event
+		m_instrumentTrack->processOutEvent(
+				MidiEvent( MidiNoteOff, midiChannel(), midiKey(), 0 ),
+				TimePos::fromFrames( 0, Engine::framesPerTick() ),
+				0 );
+	}
+
+	for( NotePlayHandle* n : m_subNotes )
+	{
+		n->forceFinish();
+	}
+	unlock();
+}
+
+
+
+
+void NotePlayHandle::forceRelease()
+{
+	noteOff( 0 );
+	m_released = true;
+	m_framesBeforeRelease = 0;
+	m_releaseFramesToDo = std::min<f_cnt_t>(m_releaseFramesToDo, 128);
+	for( NotePlayHandle* n : m_subNotes )
+	{
+		n->lock();
+		n->forceRelease();
+		n->unlock();
+	}
+}
+
+
 void NotePlayHandle::noteOff( const f_cnt_t _s )
 {
 	if( m_released )
@@ -388,7 +466,7 @@ void NotePlayHandle::noteOff( const f_cnt_t _s )
 	m_framesBeforeRelease = _s;
 	m_releaseFramesToDo = std::max<f_cnt_t>(0, actualReleaseFramesToDo());
 
-	if( m_hasMidiNote )
+	if( m_hasMidiNote && m_instrumentTrack )
 	{
 		m_hasMidiNote = false;
 
@@ -400,9 +478,9 @@ void NotePlayHandle::noteOff( const f_cnt_t _s )
 	}
 
 	// inform attached components about MIDI finished (used for recording in Piano Roll)
-	if (!instrumentTrack()->isSustainPedalPressed())
+	if (instrumentTrack() && !instrumentTrack()->isSustainPedalPressed())
 	{
-		if( m_origin == Origin::MidiInput )
+		if( m_origin == Origin::MidiInput && m_instrumentTrack )
 		{
 			setLength( TimePos( static_cast<f_cnt_t>( totalFramesPlayed() / Engine::framesPerTick() ) ) );
 			m_instrumentTrack->midiNoteOff( *this );
@@ -415,7 +493,7 @@ void NotePlayHandle::noteOff( const f_cnt_t _s )
 
 f_cnt_t NotePlayHandle::actualReleaseFramesToDo() const
 {
-	return m_instrumentTrack->m_soundShaping.releaseFrames();
+	return m_instrumentTrack ? m_instrumentTrack->m_soundShaping.releaseFrames() : 0;
 }
 
 
@@ -424,7 +502,7 @@ f_cnt_t NotePlayHandle::actualReleaseFramesToDo() const
 void NotePlayHandle::setFrames( const f_cnt_t _frames )
 {
 	m_frames = _frames;
-	if( m_frames == 0 )
+	if( m_frames == 0 && m_instrumentTrack )
 	{
 		m_frames = m_instrumentTrack->beatLen( this );
 	}
@@ -436,7 +514,7 @@ void NotePlayHandle::setFrames( const f_cnt_t _frames )
 
 float NotePlayHandle::volumeLevel( const f_cnt_t _frame )
 {
-	return m_instrumentTrack->m_soundShaping.volumeLevel( this, _frame );
+	return m_instrumentTrack ? m_instrumentTrack->m_soundShaping.volumeLevel( this, _frame ) : 0.0f;
 }
 
 
@@ -521,6 +599,7 @@ bool NotePlayHandle::operator==( const NotePlayHandle & _nph ) const
 
 void NotePlayHandle::updateFrequency()
 {
+	if (!m_instrumentTrack || !m_baseDetuning) { return; }
 	int masterPitch = m_instrumentTrack->m_useMasterPitchModel.value() ? Engine::getSong()->masterPitch() : 0;
 	int baseNote = m_instrumentTrack->baseNoteModel()->value();
 	float detune = m_baseDetuning->value();
@@ -534,7 +613,7 @@ void NotePlayHandle::updateFrequency()
 		if (m_instrumentTrack->isKeyMapped(transposedKey))
 		{
 			const auto frequency = m_instrumentTrack->m_microtuner.keyToFreq(transposedKey, baseNote);
-			m_frequency = frequency * std::exp2((detune + instrumentPitch / 100) / 12.f);
+			m_frequency = frequency * std::exp2((detune + instrumentPitch / 100.0f) / 12.f);
 			m_unpitchedFrequency = frequency * std::exp2(detune / 12.f);
 		}
 		else

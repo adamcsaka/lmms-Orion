@@ -66,6 +66,10 @@ public slots:
 	void moveDown(ControllerView* view);
 	void addController(Controller* controller);
 	void removeController(Controller* controller);
+	void savePresets();
+	void loadPresets();
+	void loadPresetFile(const QString & fileName);
+	void showPresetsMenu();
 
 private slots:
 	void addController();
@@ -77,6 +81,9 @@ private:
 	QScrollArea * m_scrollArea;
 	QVBoxLayout * m_scrollAreaLayout;
 	QPushButton * m_addButton;
+	QPushButton * m_savePresetButton;
+	QPushButton * m_loadPresetButton;
+	QPushButton * m_presetsMenuButton;
 
 	// Stores the index of where to insert the next ControllerView.
 	// Needed so that the StretchItem always stays at the last position.

@@ -73,6 +73,7 @@ public:
 	virtual void updateAfterTrackAdd();
 
 	void clearAllTracks();
+	int removeUnusedAutomationTracks();
 
 	const TrackList & tracks() const
 	{

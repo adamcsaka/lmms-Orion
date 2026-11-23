@@ -327,6 +327,15 @@ public:
 		return m_useControllerValue;
 	}
 
+	bool isBeingManipulated() const
+	{
+		return m_isBeingManipulated;
+	}
+	void setIsBeingManipulated( const bool b )
+	{
+		m_isBeingManipulated = b;
+	}
+
 public slots:
 	virtual void reset();
 	void unlink();
@@ -434,6 +443,8 @@ private:
 	QMutex m_valueBufferMutex;
 
 	bool m_useControllerValue;
+
+	bool m_isBeingManipulated = false;
 
 signals:
 	void initValueChanged( float val );

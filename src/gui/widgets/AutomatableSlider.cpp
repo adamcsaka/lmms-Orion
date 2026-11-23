@@ -57,6 +57,7 @@ AutomatableSlider::AutomatableSlider( QWidget * _parent,
 
 void AutomatableSlider::contextMenuEvent( QContextMenuEvent * _me )
 {
+	if( !model() ) { return; }
 	CaptionMenu contextMenu( model()->displayName() );
 	addDefaultActions( &contextMenu );
 	contextMenu.exec( QCursor::pos() );
@@ -73,6 +74,7 @@ void AutomatableSlider::mousePressEvent( QMouseEvent * _me )
 		AutomatableModel* thisModel = model();
 		if (thisModel)
 		{
+			thisModel->setIsBeingManipulated(true);
 			thisModel->addJournalCheckPoint();
 			thisModel->saveJournallingState(false);
 		}
@@ -94,6 +96,7 @@ void AutomatableSlider::mouseReleaseEvent( QMouseEvent * _me )
 	AutomatableModel* thisModel = model();
 	if (thisModel)
 	{
+		thisModel->setIsBeingManipulated(false);
 		thisModel->restoreJournallingState();
 	}
 
@@ -133,10 +136,13 @@ void AutomatableSlider::enterValue()
 
 void AutomatableSlider::modelChanged()
 {
-	QSlider::setRange( model()->minValue(), model()->maxValue() );
-	updateSlider();
-	connect( model(), SIGNAL(dataChanged()),
-				this, SLOT(updateSlider()));
+	if( model() )
+	{
+		QSlider::setRange( model()->minValue(), model()->maxValue() );
+		updateSlider();
+		connect( model(), SIGNAL(dataChanged()),
+					this, SLOT(updateSlider()));
+	}
 }
 
 
@@ -144,8 +150,11 @@ void AutomatableSlider::modelChanged()
 
 void AutomatableSlider::changeValue( int _value )
 {
-	model()->setValue( _value );
-	emit logicValueChanged( model()->value() );
+	if( model() )
+	{
+		model()->setValue( _value );
+		emit logicValueChanged( model()->value() );
+	}
 }
 
 
@@ -153,8 +162,11 @@ void AutomatableSlider::changeValue( int _value )
 
 void AutomatableSlider::moveSlider( int _value )
 {
-	model()->setValue( _value );
-	emit logicSliderMoved( model()->value() );
+	if( model() )
+	{
+		model()->setValue( _value );
+		emit logicSliderMoved( model()->value() );
+	}
 }
 
 
@@ -162,7 +174,10 @@ void AutomatableSlider::moveSlider( int _value )
 
 void AutomatableSlider::updateSlider()
 {
-	QSlider::setValue( model()->value() );
+	if( model() )
+	{
+		QSlider::setValue( model()->value() );
+	}
 }
 
 

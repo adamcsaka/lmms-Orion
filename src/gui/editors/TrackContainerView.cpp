@@ -37,6 +37,8 @@
 #include "ImportFilter.h"
 #include "Instrument.h"
 #include "InstrumentTrack.h"
+#include "InstrumentTrackView.h"
+#include "InstrumentTrackWindow.h"
 #include "PatternTrack.h"
 #include "Song.h"
 #include "StringPairDrag.h"
@@ -65,10 +67,13 @@ void InstrumentLoaderThread::run()
 {
 	Instrument *i = m_it->loadInstrument(m_name, nullptr,
 										 true /*always DnD*/);
-	QObject *parent = i->parent();
-	i->setParent( 0 );
-	i->moveToThread( m_containerThread );
-	i->setParent( parent );
+	if (i)
+	{
+		QObject *parent = i->parent();
+		i->setParent( 0 );
+		i->moveToThread( m_containerThread );
+		i->setParent( parent );
+	}
 }
 
 namespace gui
@@ -394,8 +399,21 @@ void TrackContainerView::dropEvent( QDropEvent * _de )
 	{
 		auto it = dynamic_cast<InstrumentTrack*>(Track::create(Track::Type::Instrument, m_tc));
 		auto ilt = new InstrumentLoaderThread(this, it, value);
+		connect(ilt, &QThread::finished, this, [this, it]() {
+			for (TrackView* tv : trackViews())
+			{
+				if (tv && tv->getTrack() == it)
+				{
+					if (auto itv = dynamic_cast<InstrumentTrackView*>(tv))
+					{
+						itv->getInstrumentTrackWindow()->toggleVisibility(true);
+					}
+					break;
+				}
+			}
+		});
+		connect(ilt, &QThread::finished, ilt, &QObject::deleteLater);
 		ilt->start();
-		//it->toggledInstrumentTrackButton( true );
 		_de->accept();
 	}
 	else if( type == "samplefile" || type == "pluginpresetfile"

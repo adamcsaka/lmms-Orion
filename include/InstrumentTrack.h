@@ -237,6 +237,33 @@ public:
 		return &m_mixerChannelModel;
 	}
 
+	IntModel * midiGroupModel()
+	{
+		return &m_midiGroupModel;
+	}
+
+	const IntModel * midiGroupModel() const
+	{
+		return &m_midiGroupModel;
+	}
+
+	IntModel * maxPolyphonyModel()
+	{
+		return &m_maxPolyphonyModel;
+	}
+
+	const IntModel * maxPolyphonyModel() const
+	{
+		return &m_maxPolyphonyModel;
+	}
+
+	int maxPolyphony() const
+	{
+		return m_maxPolyphonyModel.value();
+	}
+
+	void enforcePolyphonyLimit( int maxVoices );
+
 	BoolModel* useMasterPitchModel()
 	{
 		return &m_useMasterPitchModel;
@@ -257,6 +284,9 @@ public:
 
 	//! Returns a non-owning pointer to the model for the knob at the given index in the track's MIDI CC rack
 	FloatModel* midiCCModel(int index) const { return m_midiCCModel[index].get(); }
+
+	//! Randomizes all automatable parameters (synth knobs, sliders, panning, and effects; pitch optionally)
+	void randomizeParameters(bool randomizePitch = false);
 
 signals:
 	void instrumentChanged();
@@ -280,6 +310,7 @@ protected slots:
 	void updatePitch();
 	void updatePitchRange();
 	void updateMixerChannel();
+	void updatePolyphony();
 
 
 private:
@@ -316,6 +347,8 @@ private:
 	FloatModel m_pitchModel;
 	IntModel m_pitchRangeModel;
 	IntModel m_mixerChannelModel;
+	IntModel m_midiGroupModel;
+	IntModel m_maxPolyphonyModel;
 	BoolModel m_useMasterPitchModel;
 
 	Instrument * m_instrument;

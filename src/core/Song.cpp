@@ -27,6 +27,7 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QFile>
+#include <QFileInfo>
 #include <QMessageBox>
 
 #include <algorithm>
@@ -55,6 +56,7 @@
 #include "Scale.h"
 #include "SongEditor.h"
 #include "PeakController.h"
+#include "ThemeManager.h"
 
 
 namespace lmms
@@ -73,7 +75,7 @@ Song::Song() :
 	m_timeSigModel( this ),
 	m_oldTicksPerBar( DefaultTicksPerBar ),
 	m_masterVolumeModel( 100, 0, 200, this, tr( "Master volume" ) ),
-	m_masterPitchModel( 0, -12, 12, this, tr( "Master pitch" ) ),
+	m_masterPitchModel( 0, -24, 24, this, tr( "Master pitch" ) ),
 	m_nLoadingTrack( 0 ),
 	m_fileName(),
 	m_oldFileName(),
@@ -725,6 +727,25 @@ void Song::startExport()
 	m_exporting = true;
 	updateLength();
 
+	if (m_exportPlayMode == PlayMode::Pattern)
+	{
+		m_exportSongBegin = TimePos(0, 0);
+		m_exportSongEnd = Engine::patternStore()->lengthOfCurrentPattern();
+		if (m_exportSongEnd <= 0)
+		{
+			m_exportSongEnd = TimePos(1, 0);
+		}
+		m_exportLoopBegin = TimePos(0, 0);
+		m_exportLoopEnd = m_exportSongEnd;
+		m_exportEffectiveLength = m_exportSongEnd;
+		m_loopRenderRemaining = 1;
+
+		getTimeline(PlayMode::Pattern).setTicks(0);
+		playPattern();
+		m_vstSyncController.setPlaybackState( true );
+		return;
+	}
+
 	auto& timeline = getTimeline(PlayMode::Song);
 
 	if (m_renderBetweenMarkers)
@@ -774,6 +795,7 @@ void Song::stopExport()
 {
 	stop();
 	m_exporting = false;
+	m_exportPlayMode = PlayMode::Song;
 
 	m_vstSyncController.setPlaybackState( m_playing );
 }
@@ -922,6 +944,11 @@ void Song::clearProject()
 
 	removeAllControllers();
 
+	if( getGUI() != nullptr )
+	{
+		gui::ThemeManager::inst()->resetToGlobalDefault();
+	}
+
 	emit dataChanged();
 
 	Engine::projectJournal()->clearJournal();
@@ -955,6 +982,7 @@ void Song::createNewProject()
 	}
 
 	m_loadingProject = true;
+	m_patternStoreRestored = false;
 
 	clearProject();
 
@@ -1017,6 +1045,7 @@ void Song::loadProject( const QString & fileName )
 	QDomNode node;
 
 	m_loadingProject = true;
+	m_patternStoreRestored = false;
 
 	Engine::projectJournal()->setJournalling( false );
 
@@ -1118,6 +1147,7 @@ void Song::loadProject( const QString & fileName )
 		}
 	}
 
+	bool hasProjectTheme = false;
 	while( !node.isNull() && !isCancelled() )
 	{
 		if( node.isElement() )
@@ -1125,6 +1155,16 @@ void Song::loadProject( const QString & fileName )
 			if( node.nodeName() == "trackcontainer" )
 			{
 				( (JournallingObject *)( this ) )->restoreState( node.toElement() );
+			}
+			else if (node.nodeName() == "patternstore" && !m_patternStoreRestored)
+			{
+				QDomNode tcNode = node.namedItem(TrackContainer::classNodeName());
+				if (tcNode.isElement())
+				{
+					Engine::patternStore()->clearAllTracks();
+					Engine::patternStore()->restoreState(tcNode.toElement());
+					m_patternStoreRestored = true;
+				}
 			}
 			else if( node.nodeName() == "controllers" )
 			{
@@ -1137,6 +1177,14 @@ void Song::loadProject( const QString & fileName )
 			else if (node.nodeName() == "keymaps")
 			{
 				restoreKeymapStates(node.toElement());
+			}
+			else if( node.nodeName() == "projecttheme" )
+			{
+				hasProjectTheme = true;
+				if( getGUI() != nullptr )
+				{
+					gui::ThemeManager::inst()->loadProjectTheme( node.toElement(), QFileInfo(fileName).absolutePath() );
+				}
 			}
 			else if( getGUI() != nullptr )
 			{
@@ -1163,6 +1211,11 @@ void Song::loadProject( const QString & fileName )
 			}
 		}
 		node = node.nextSibling();
+	}
+
+	if( !hasProjectTheme && getGUI() != nullptr )
+	{
+		gui::ThemeManager::inst()->resetToGlobalDefault();
 	}
 
 	// quirk for fixing projects with broken positions of Clips inside pattern tracks
@@ -1238,6 +1291,11 @@ bool Song::saveProjectFile(const QString & filename, bool withResources)
 
 	saveState( dataFile, dataFile.content() );
 
+	// Always save PatternStore so pattern editor tracks & patterns are never lost
+	QDomElement patternStoreElement = dataFile.createElement("patternstore");
+	dataFile.content().appendChild(patternStoreElement);
+	Engine::patternStore()->saveState(dataFile, patternStoreElement);
+
 	Engine::mixer()->saveState( dataFile, dataFile.content() );
 	if( getGUI() != nullptr )
 	{
@@ -1246,6 +1304,7 @@ bool Song::saveProjectFile(const QString & filename, bool withResources)
 		getGUI()->automationEditor()->m_editor->saveState( dataFile, dataFile.content() );
 		getGUI()->getProjectNotes()->SerializingObject::saveState( dataFile, dataFile.content() );
 		getTimeline(PlayMode::Song).saveState(dataFile, dataFile.content());
+		gui::ThemeManager::inst()->saveProjectTheme( dataFile, dataFile.content() );
 	}
 
 	saveControllerStates( dataFile, dataFile.content() );

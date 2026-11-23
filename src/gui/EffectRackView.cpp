@@ -34,13 +34,20 @@
 #include <QMimeData>
 #include <QDomDocument>
 #include <QKeyEvent>
+#include <QFile>
+#include <QInputDialog>
+#include <QTextStream>
 
 #include "CaptionMenu.h"
+#include "ConfigManager.h"
+#include "FileDialog.h"
 #include "embed.h"
 #include "DeprecationHelper.h"
 #include "EffectSelectDialog.h"
 #include "EffectView.h"
 #include "GroupBox.h"
+#include "Song.h"
+#include "TextFloat.h"
 
 
 namespace lmms::gui
@@ -69,14 +76,38 @@ EffectRackView::EffectRackView( EffectChain* model, QWidget* parent ) :
 
 	effectsLayout->addWidget( m_scrollArea );
 
+	auto btnLayout = new QHBoxLayout;
+	btnLayout->setSpacing( 2 );
+	btnLayout->setContentsMargins( 0, 0, 0, 0 );
+
 	auto addButton = new QPushButton;
 	addButton->setText( tr( "Add effect" ) );
 	addButton->setFocusPolicy(Qt::NoFocus);
-
-	effectsLayout->addWidget( addButton );
-
 	connect( addButton, SIGNAL(clicked()), this, SLOT(addEffect()));
+	btnLayout->addWidget( addButton );
 
+	auto saveButton = new QPushButton;
+	saveButton->setText( tr( "Save FX" ) );
+	saveButton->setToolTip( tr( "Save effect group/chain to file" ) );
+	saveButton->setFocusPolicy(Qt::NoFocus);
+	connect( saveButton, SIGNAL(clicked()), this, SLOT(saveEffectChain()));
+	btnLayout->addWidget( saveButton );
+
+	auto loadButton = new QPushButton;
+	loadButton->setText( tr( "Load FX" ) );
+	loadButton->setToolTip( tr( "Load effect group/chain from file" ) );
+	loadButton->setFocusPolicy(Qt::NoFocus);
+	connect( loadButton, SIGNAL(clicked()), this, SLOT(loadEffectChain()));
+	btnLayout->addWidget( loadButton );
+
+	auto randomizeButton = new QPushButton;
+	randomizeButton->setText( tr( "Random FX" ) );
+	randomizeButton->setToolTip( tr( "Generate and randomize effects in this rack (specify count)" ) );
+	randomizeButton->setFocusPolicy(Qt::NoFocus);
+	connect( randomizeButton, SIGNAL(clicked()), this, SLOT(randomizeEffects()));
+	btnLayout->addWidget( randomizeButton );
+
+	effectsLayout->addLayout( btnLayout );
 
 	m_lastY = 0;
 
@@ -128,6 +159,11 @@ void EffectRackView::moveUp( EffectView* view )
 		m_effectViews[i] = temp;
 
 		update();
+
+	if (Engine::getSong())
+	{
+		Engine::getSong()->setModified();
+	}
 	}
 }
 
@@ -154,6 +190,11 @@ void EffectRackView::deletePlugin( EffectView* view )
 	fxChain()->removeEffect( e );
 	e->deleteLater();
 	update();
+
+	if (Engine::getSong())
+	{
+		Engine::getSong()->setModified();
+	}
 }
 
 
@@ -256,6 +297,11 @@ void EffectRackView::addEffect()
 	fxChain()->appendEffect( fx );
 	update();
 
+	if (Engine::getSong())
+	{
+		Engine::getSong()->setModified();
+	}
+
 	// Find the effectView, and show the controls
 	for (const auto& effectView : m_effectViews)
 	{
@@ -278,6 +324,11 @@ void EffectRackView::modelChanged()
 	m_effectsGroupBox->setModel( &fxChain()->m_enabledModel );
 	connect( fxChain(), SIGNAL(aboutToClear()), this, SLOT(clearViews()));
 	update();
+
+	if (Engine::getSong())
+	{
+		Engine::getSong()->setModified();
+	}
 }
 
 
@@ -334,15 +385,174 @@ void EffectRackView::keyPressEvent( QKeyEvent* event )
 	QWidget::keyPressEvent( event );
 }
 
+void EffectRackView::saveEffectChain()
+{
+	if (!fxChain()) { return; }
+	QString fileName = FileDialog::getSaveFileName(
+		this,
+		tr("Save Effect Group"),
+		ConfigManager::inst()->workingDir(),
+		tr("LMMS Effect Chain (*.lmms-fxgroup *.xml);;All files (*.*)")
+	);
+	if (fileName.isEmpty()) { return; }
+	if (!fileName.endsWith(".lmms-fxgroup", Qt::CaseInsensitive) && !fileName.endsWith(".xml", Qt::CaseInsensitive))
+	{
+		fileName += ".lmms-fxgroup";
+	}
+
+	QDomDocument doc("lmms-fxchain");
+	QDomElement root = doc.createElement("lmms-effect-chain");
+	root.setAttribute("version", "1.0");
+	doc.appendChild(root);
+
+	QDomElement fxElement = doc.createElement("effectchain");
+	fxChain()->saveSettings(doc, fxElement);
+	root.appendChild(fxElement);
+
+	QFile file(fileName);
+	if (file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
+	{
+		QTextStream stream(&file);
+		stream << doc.toString();
+		file.close();
+	}
+}
+
+void EffectRackView::loadEffectChain()
+{
+	if (!fxChain()) { return; }
+	QString fileName = FileDialog::getOpenFileName(
+		this,
+		tr("Load Effect Group"),
+		ConfigManager::inst()->workingDir(),
+		tr("LMMS Effect Chain (*.lmms-fxgroup *.xml);;All files (*.*)")
+	);
+	if (fileName.isEmpty()) { return; }
+
+	QFile file(fileName);
+	if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) { return; }
+
+	QDomDocument doc;
+	if (!doc.setContent(&file))
+	{
+		file.close();
+		return;
+	}
+	file.close();
+
+	QDomElement root = doc.documentElement();
+	QDomElement fxElement;
+	if (root.nodeName() == "effectchain")
+	{
+		fxElement = root;
+	}
+	else
+	{
+		fxElement = root.firstChildElement("effectchain");
+	}
+
+	if (!fxElement.isNull())
+	{
+		fxChain()->clear();
+		fxChain()->loadSettings(fxElement);
+		update();
+
+	if (Engine::getSong())
+	{
+		Engine::getSong()->setModified();
+	}
+	}
+}
+
 void EffectRackView::contextMenuEvent( QContextMenuEvent* event )
 {
 	QPointer<CaptionMenu> contextMenu = new CaptionMenu( tr( "Effects Chain" ), this );
 	contextMenu->addAction( embed::getIconPixmap( "add" ), tr( "&Add effect" ), this, SLOT(addEffect()) );
 	contextMenu->addAction( embed::getIconPixmap( "edit_paste" ), tr( "&Paste effect" ), this, SLOT(pasteEffect()), QKeySequence::Paste );
 	contextMenu->addSeparator();
-	contextMenu->addAction( embed::getIconPixmap( "cancel" ), tr( "&Clear all effects" ), this, SLOT(clearViews()) );
+	contextMenu->addAction( embed::getIconPixmap( "file_save" ), tr( "&Save effect group..." ), this, SLOT(saveEffectChain()) );
+	contextMenu->addAction( embed::getIconPixmap( "file_open" ), tr( "&Load effect group..." ), this, SLOT(loadEffectChain()) );
+	contextMenu->addSeparator();
+	contextMenu->addAction( embed::getIconPixmap( "arp_random" ), tr( "&Randomize effect rack..." ), this, SLOT(randomizeEffects()) );
+	contextMenu->addSeparator();
+	contextMenu->addAction( embed::getIconPixmap( "cancel" ), tr( "&Clear all effects" ), this, [this]() {
+		if (fxChain()) { fxChain()->clear(); update(); }
+	} );
 	contextMenu->exec( QCursor::pos() );
 	delete contextMenu;
+}
+
+void EffectRackView::randomizeEffects()
+{
+	if (!fxChain()) { return; }
+
+	int initialCount = ConfigManager::inst()->value("ui", "random_rack_effect_count", "3").toInt();
+	if (initialCount < 1 || initialCount > 10) { initialCount = 3; }
+	bool ok = false;
+	int count = QInputDialog::getInt(
+		this,
+		tr("Randomize Effect Rack"),
+		tr("Number of random effects to generate:"),
+		initialCount, 1, 10, 1, &ok);
+	if (!ok || count <= 0) { return; }
+	ConfigManager::inst()->setValue("ui", "random_rack_effect_count", QString::number(count));
+
+	const char* fxPlugins[] = {
+		"amplifier", "bassbooster", "bitcrush", "crossovereq", "delay",
+		"dispersion", "dualfilter", "dynamicsprocessor", "eq", "flanger",
+		"frequencyshifter", "multitapecho", "reverbsc", "slewdistortion",
+		"stereomatrix", "waveshaper"
+	};
+	const int numFx = sizeof(fxPlugins) / sizeof(fxPlugins[0]);
+
+	fxChain()->clear();
+
+	for (int i = 0; i < count; ++i)
+	{
+		const char* chosenFx = fxPlugins[rand() % numFx];
+		Effect* e = Effect::instantiate(QString::fromUtf8(chosenFx), fxChain(), nullptr);
+		if (e && e->isOkay())
+		{
+			fxChain()->appendEffect(e);
+			const auto fxModels = e->findChildren<AutomatableModel*>();
+			for (auto* fm_obj : fxModels)
+			{
+				if (auto fm = fm_obj->dynamicCast<FloatModel>())
+				{
+					float minVal = fm->minValue();
+					float maxVal = fm->maxValue();
+					if (std::isfinite(minVal) && std::isfinite(maxVal) && maxVal > minVal)
+					{
+						float r = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+						fm->setValue(minVal + r * (maxVal - minVal));
+					}
+				}
+				else if (auto im = fm_obj->dynamicCast<IntModel>())
+				{
+					int minVal = im->minValue();
+					int maxVal = im->maxValue();
+					if (maxVal > minVal && (maxVal - minVal) <= 32)
+					{
+						im->setValue(minVal + (rand() % (maxVal - minVal + 1)));
+					}
+				}
+			}
+		}
+	}
+
+	update();
+
+	if (Engine::getSong())
+	{
+		Engine::getSong()->setModified();
+	}
+
+	TextFloat::displayMessage(
+		tr("Effect Rack Randomized"),
+		tr("Generated and randomized %1 effect(s)!").arg(count),
+		embed::getIconPixmap("arp_random"),
+		2500
+	);
 }
 
 

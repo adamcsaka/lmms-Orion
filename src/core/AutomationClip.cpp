@@ -53,6 +53,8 @@ AutomationClip::AutomationClip( AutomationTrack * _auto_track ) :
 	m_progressionType( ProgressionType::Discrete ),
 	m_dragging( false ),
 	m_isRecording( false ),
+	m_steps( 0 ),
+	m_fractionalSteps( 0.0f ),
 	m_lastRecordedValue( 0 )
 {
 	changeLength( TimePos( 1, 0 ) );
@@ -69,6 +71,8 @@ AutomationClip::AutomationClip( const AutomationClip & _clip_to_copy ) :
 	m_progressionType(_clip_to_copy.m_progressionType),
 	m_dragging(false),
 	m_isRecording(_clip_to_copy.m_isRecording),
+	m_steps(_clip_to_copy.m_steps),
+	m_fractionalSteps(_clip_to_copy.m_fractionalSteps),
 	m_lastRecordedValue(0)
 {
 	// Locks the mutex of the copied AutomationClip to make sure it
@@ -192,12 +196,43 @@ TimePos AutomationClip::timeMapLength() const
 
 
 
+void AutomationClip::setSteps(int newSteps)
+{
+	if (newSteps < 1 || newSteps == m_steps) { return; }
+	m_fractionalSteps = static_cast<float>(newSteps);
+	m_steps = newSteps;
+	updateLength();
+	emit dataChanged();
+}
+
+void AutomationClip::setFractionalSteps(float steps)
+{
+	if (steps <= 0.0f) { return; }
+	m_fractionalSteps = steps;
+	m_steps = std::max(1, static_cast<int>(std::ceil(steps)));
+	updateLength();
+	emit dataChanged();
+}
+
+
+
+
 void AutomationClip::updateLength()
 {
 	// Technically it only matters if the clip has been resized from the right, but this
 	// checks if it has been resized from either direction.
 	if (getAutoResize())
 	{
+		if (m_fractionalSteps > 0.0f)
+		{
+			changeLength(TimePos(static_cast<tick_t>(m_fractionalSteps * TimePos::ticksPerBar() / TimePos::stepsPerBar())));
+			return;
+		}
+		if (m_steps > 0)
+		{
+			changeLength(TimePos(m_steps * TimePos::ticksPerBar() / TimePos::stepsPerBar()));
+			return;
+		}
 		if (m_autoTrack != nullptr && m_autoTrack->trackContainer() == Engine::patternStore())
 		{
 			// If inside a pattern, the clip is always the length of it.
@@ -740,6 +775,33 @@ void AutomationClip::flipX(int start, int end)
 
 
 
+void AutomationClip::shiftNodes(int deltaTicks)
+{
+	QMutexLocker m(&m_clipMutex);
+	if (m_timeMap.isEmpty() || deltaTicks == 0) { return; }
+
+	tick_t clipLen = length().getTicks();
+	if (clipLen <= 0) { clipLen = TimePos::ticksPerBar(); }
+
+	timeMap tempMap;
+	for (auto it = m_timeMap.begin(); it != m_timeMap.end(); ++it)
+	{
+		int oldPos = POS(it);
+		int newPos = oldPos + deltaTicks;
+		while (newPos < 0) { newPos += clipLen; }
+		newPos = newPos % clipLen;
+		tempMap[newPos] = AutomationNode(this, INVAL(it), OUTVAL(it), newPos);
+	}
+
+	m_timeMap = tempMap;
+	cleanObjects();
+	generateTangents();
+	emit dataChanged();
+}
+
+
+
+
 void AutomationClip::saveSettings( QDomDocument & _doc, QDomElement & _this )
 {
 	QMutexLocker m(&m_clipMutex);
@@ -752,6 +814,14 @@ void AutomationClip::saveSettings( QDomDocument & _doc, QDomElement & _this )
 	_this.setAttribute( "mute", QString::number( isMuted() ) );
 	_this.setAttribute("off", startTimeOffset());
 	_this.setAttribute("autoresize", QString::number(getAutoResize()));
+	if (m_steps > 0)
+	{
+		_this.setAttribute("steps", QString::number(m_steps));
+	}
+	if (m_fractionalSteps > 0.0f)
+	{
+		_this.setAttribute("fractionalSteps", QString::number(m_fractionalSteps, 'f', 2));
+	}
 
 	if (const auto& c = color())
 	{
@@ -804,6 +874,14 @@ void AutomationClip::loadSettings( const QDomElement & _this )
 	setMuted(_this.attribute( "mute", QString::number( false ) ).toInt() );
 	setAutoResize(_this.attribute("autoresize", "1").toInt());
 	setStartTimeOffset(_this.attribute("off").toInt());
+	if (_this.hasAttribute("fractionalSteps"))
+	{
+		setFractionalSteps(_this.attribute("fractionalSteps").toFloat());
+	}
+	else if (_this.hasAttribute("steps"))
+	{
+		setSteps(_this.attribute("steps").toInt());
+	}
 
 	for( QDomNode node = _this.firstChild(); !node.isNull();
 						node = node.nextSibling() )
@@ -1043,6 +1121,59 @@ void AutomationClip::clear()
 
 	m_timeMap.clear();
 
+	emit dataChanged();
+}
+
+
+void AutomationClip::duplicateContent()
+{
+	QMutexLocker m(&m_clipMutex);
+	const tick_t currentLen = length().getTicks();
+	if (currentLen <= 0 || m_timeMap.isEmpty())
+	{
+		return;
+	}
+
+	timeMap newMap = m_timeMap;
+	for (auto it = m_timeMap.begin(); it != m_timeMap.end(); ++it)
+	{
+		const int newPos = it.key() + static_cast<int>(currentLen);
+		AutomationNode node = it.value();
+		node.setPos(newPos);
+		newMap[newPos] = node;
+	}
+	m_timeMap = std::move(newMap);
+
+	if (m_steps > 0)
+	{
+		m_steps *= 2;
+	}
+	changeLength(TimePos(currentLen * 2));
+	emit dataChanged();
+}
+
+
+void AutomationClip::scaleContent(float percentage)
+{
+	if (percentage <= 0.0f) { return; }
+	const float ratio = percentage / 100.0f;
+	QMutexLocker m(&m_clipMutex);
+
+	timeMap newMap;
+	for (auto it = m_timeMap.begin(); it != m_timeMap.end(); ++it)
+	{
+		const int newPos = static_cast<int>(std::round(it.key() * ratio));
+		AutomationNode node = it.value();
+		node.setPos(newPos);
+		newMap[newPos] = node;
+	}
+	m_timeMap = std::move(newMap);
+
+	if (m_steps > 0)
+	{
+		m_steps = std::max(1, static_cast<int>(std::round(m_steps * ratio)));
+	}
+	changeLength(TimePos(std::max(1, static_cast<int>(std::round(length().getTicks() * ratio)))));
 	emit dataChanged();
 }
 

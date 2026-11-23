@@ -244,6 +244,64 @@ void TrackContainer::clearAllTracks()
 
 
 
+int TrackContainer::removeUnusedAutomationTracks()
+{
+	int removedCount = 0;
+	std::vector<Track*> toDelete;
+
+	m_tracksMutex.lockForRead();
+	for (Track* t : m_tracks)
+	{
+		if (t->type() == Track::Type::Automation)
+		{
+			bool hasContent = false;
+			for (int c = 0; c < t->numOfClips(); ++c)
+			{
+				auto clip = t->getClip(c);
+				if (!clip)
+				{
+					continue;
+				}
+				auto ac = dynamic_cast<AutomationClip*>(clip);
+				if (ac)
+				{
+					if (!ac->objects().empty() || !ac->getTimeMap().isEmpty())
+					{
+						hasContent = true;
+						break;
+					}
+				}
+				else
+				{
+					hasContent = true;
+					break;
+				}
+			}
+			if (!hasContent)
+			{
+				toDelete.push_back(t);
+			}
+		}
+	}
+	m_tracksMutex.unlock();
+
+	for (Track* t : toDelete)
+	{
+		delete t;
+		++removedCount;
+	}
+
+	if (removedCount > 0 && Engine::getSong())
+	{
+		Engine::getSong()->setModified();
+	}
+
+	return removedCount;
+}
+
+
+
+
 bool TrackContainer::isEmpty() const
 {
 	for (const auto& track : m_tracks)
@@ -306,7 +364,9 @@ AutomatedValueMap TrackContainer::automatedValuesFromTracks(const TrackList &tra
 				continue;
 			}
 			TimePos relTime = time - p->startPosition() - p->startTimeOffset();
-			if (!p->isInPattern()) {
+			if (p->isInPattern() && p->length() > 0) {
+				relTime = relTime % p->length();
+			} else if (!p->isInPattern()) {
 				relTime = std::min(static_cast<int>(relTime), p->length() - p->startTimeOffset());
 			}
 			float value = p->valueAt(relTime);

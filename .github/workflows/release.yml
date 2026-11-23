@@ -1,0 +1,229 @@
+name: Release LMMS Orion
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag (e.g. v7.0.0)'
+        required: true
+        default: 'v7.0.0'
+      release_name:
+        description: 'Release Name / Title'
+        required: true
+        default: 'LMMS Orion v7.0.0'
+      prerelease:
+        description: 'Mark as Pre-release'
+        required: false
+        default: false
+        type: boolean
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Build Windows x64
+    runs-on: windows-2022
+    env:
+      CCACHE_MAXSIZE: 0
+      CCACHE_NOCOMPRESS: 1
+      CMAKE_BUILD_PARALLEL_LEVEL: 4
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Cache vcpkg dependencies
+        id: cache-deps
+        uses: actions/cache@v4
+        with:
+          key: vcpkg-msvc-x86_64-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-msvc-x86_64-
+          path: build\vcpkg_installed
+
+      - name: Cache ccache data
+        uses: actions/cache@v4
+        with:
+          key: ccache-release-msvc-x64-${{ github.ref }}-${{ github.run_id }}
+          restore-keys: |
+            ccache-release-msvc-x64-${{ github.ref }}-
+            ccache-release-msvc-x64-
+          path: ~\AppData\Local\ccache
+
+      - name: Install tools
+        run: choco install ccache nsis ninja
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '6.8.*'
+          arch: 'win64_msvc2022_64'
+          archives: qtbase qtsvg qttools
+          cache: true
+
+      - name: Set up MSVC build environment
+        uses: TheMrMilchmann/setup-msvc-dev@v3
+        with:
+          arch: x64
+
+      - name: Configure CMake
+        run: |
+          mkdir build -Force
+          cmake -S . `
+            -B build `
+            -G Ninja `
+            --toolchain C:/vcpkg/scripts/buildsystems/vcpkg.cmake `
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo `
+            -DTARGET_UARCH=official `
+            -DWANT_QT6=ON `
+            -DUSE_COMPILE_CACHE=ON `
+            -DUSE_WERROR=OFF `
+            -DVCPKG_TARGET_TRIPLET="x64-windows" `
+            -DVCPKG_HOST_TRIPLET="x64-windows"
+
+      - name: Build LMMS
+        run: cmake --build build
+
+      - name: Package Portable ZIP & Installer
+        run: |
+          cmake --install build --prefix build\portable
+          $zipName = "LMMS-Orion-v7-win64-portable.zip"
+          Compress-Archive -Path build\portable\* -DestinationPath "build\$zipName"
+          cmake --build build --target package || true
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: |
+            build/LMMS-Orion-v7-win64-portable.zip
+            build/lmms-*.exe
+
+  linux:
+    name: Build Linux x86_64 AppImage
+    runs-on: ubuntu-24.04
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: 4
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends \
+            $(xargs < .github/workflows/deps-ubuntu-24.04-gcc.txt) \
+            extra-cmake-modules ninja-build libfltk1.3-dev || true
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DTARGET_UARCH=official \
+            -DWANT_QT6=ON \
+            -DUSE_WERROR=OFF \
+            -DWANT_DEBUG_CPACK=ON
+
+      - name: Build LMMS
+        run: cmake --build build
+
+      - name: Package AppImage
+        run: |
+          cmake --build build --target package || true
+
+      - name: Upload Linux Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-release
+          path: build/lmms-*.AppImage
+
+  macos:
+    name: Build macOS Apple Silicon / Universal
+    runs-on: macos-14
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: 4
+      HOMEBREW_NO_AUTO_UPDATE: 1
+      HOMEBREW_NO_INSTALL_UPGRADE: 1
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          brew bundle install --verbose || true
+          pipx install dmgbuild || true
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DTARGET_UARCH=official \
+            -DWANT_QT6=ON \
+            -DUSE_WERROR=OFF
+
+      - name: Build LMMS
+        run: cmake --build build
+
+      - name: Package DMG
+        run: |
+          cmake --build build --target package || true
+
+      - name: Upload macOS Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-release
+          path: build/lmms-*.dmg
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [windows, linux, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Flatten and list artifacts
+        run: |
+          mkdir -p final-assets
+          find release-artifacts -type f -exec cp {} final-assets/ \;
+          ls -la final-assets
+
+      - name: Determine Tag and Title
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
+            echo "title=${{ github.event.inputs.release_name }}" >> $GITHUB_OUTPUT
+            echo "prerelease=${{ github.event.inputs.prerelease }}" >> $GITHUB_OUTPUT
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+            echo "tag=${TAG}" >> $GITHUB_OUTPUT
+            echo "title=LMMS Orion ${TAG}" >> $GITHUB_OUTPUT
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.title }}
+          prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}
+          generate_release_notes: true
+          files: final-assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

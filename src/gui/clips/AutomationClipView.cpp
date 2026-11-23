@@ -24,6 +24,7 @@
 #include "AutomationClipView.h"
 
 #include <QApplication>
+#include <QInputDialog>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>  // IWYU pragma: keep
@@ -138,6 +139,23 @@ void AutomationClipView::toggleRecording()
 }
 
 
+void AutomationClipView::changeStepCount()
+{
+	if (!m_clip) { return; }
+	bool ok = false;
+	double curSteps = m_clip->fractionalSteps() > 0.0f ? static_cast<double>(m_clip->fractionalSteps()) : (m_clip->length().getTicks() * TimePos::stepsPerBar() / static_cast<double>(TimePos::ticksPerBar()));
+	if (curSteps < 0.25) curSteps = 16.0;
+	double newSteps = QInputDialog::getDouble(
+		this, tr("Set track steps"),
+		tr("Number of steps for this automation track (e.g. 1, 2, 3 in 4/4, 12 for 3/4, or decimals like 2.5):"),
+		curSteps, 0.25, 1024.0, 2, &ok );
+	if (ok)
+	{
+		m_clip->setFractionalSteps(static_cast<float>(newSteps));
+	}
+}
+
+
 
 
 void AutomationClipView::flipY()
@@ -153,6 +171,27 @@ void AutomationClipView::flipX()
 {
 	m_clip->flipX(std::max(0, -m_clip->startTimeOffset()), std::max(0, m_clip->length() - m_clip->startTimeOffset()));
 	update();
+}
+
+void AutomationClipView::duplicateClipContent()
+{
+	if (m_clip)
+	{
+		m_clip->duplicateContent();
+		update();
+	}
+}
+
+void AutomationClipView::scaleClipContent()
+{
+	if (!m_clip) { return; }
+	bool ok = false;
+	double pct = QInputDialog::getDouble(this, tr("Scale Clip Content"), tr("Scale percentage:"), 100.0, 1.0, 1000.0, 1, &ok);
+	if (ok && pct > 0.0)
+	{
+		m_clip->scaleContent(static_cast<float>(pct));
+		update();
+	}
 }
 
 
@@ -179,12 +218,50 @@ void AutomationClipView::constructContextMenu( QMenu * _cm )
 	_cm->addAction( embed::getIconPixmap( "record" ),
 						tr( "Set/clear record" ),
 						this, SLOT(toggleRecording()));
+	_cm->addAction( embed::getIconPixmap( "settings" ),
+						tr( "Set track step count..." ),
+						this, SLOT(changeStepCount()));
+	_cm->addAction( embed::getIconPixmap( "prev" ),
+						tr( "Shift Left (1 Step)" ), [this]() {
+							if (m_clip)
+							{
+								int stepTicks = TimePos::ticksPerBar() / TimePos::stepsPerBar();
+								m_clip->shiftNodes(-stepTicks);
+								update();
+							}
+						});
+	_cm->addAction( embed::getIconPixmap( "next" ),
+						tr( "Shift Right (1 Step)" ), [this]() {
+							if (m_clip)
+							{
+								int stepTicks = TimePos::ticksPerBar() / TimePos::stepsPerBar();
+								m_clip->shiftNodes(stepTicks);
+								update();
+							}
+						});
+	_cm->addAction( embed::getIconPixmap( "edit_copy" ),
+						tr( "Shift Automation by Steps..." ), [this]() {
+							if (!m_clip) { return; }
+							bool ok = false;
+							double shiftSteps = QInputDialog::getDouble(
+								this, tr("Shift Automation"),
+								tr("Steps to shift (positive = right, negative = left, decimals supported):"),
+								1.0, -1024.0, 1024.0, 2, &ok);
+							if (ok && shiftSteps != 0.0)
+							{
+								int stepTicks = static_cast<int>(std::round(shiftSteps * (TimePos::ticksPerBar() / TimePos::stepsPerBar())));
+								m_clip->shiftNodes(stepTicks);
+								update();
+							}
+						});
 	_cm->addAction( embed::getIconPixmap( "flip_y" ),
 						tr( "Flip Vertically (Visible)" ),
 						this, SLOT(flipY()));
 	_cm->addAction( embed::getIconPixmap( "flip_x" ),
 						tr( "Flip Horizontally (Visible)" ),
 						this, SLOT(flipX()));
+	_cm->addAction(embed::getIconPixmap("edit_copy"), tr("Duplicate Content (2x)"), this, SLOT(duplicateClipContent()));
+	_cm->addAction(embed::getIconPixmap("scale"), tr("Scale Content (%)"), this, SLOT(scaleClipContent()));
 	
 	if (!m_clip->m_objects.empty())
 	{

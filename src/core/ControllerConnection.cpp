@@ -107,6 +107,7 @@ void ControllerConnection::setController( Controller * _controller )
 	if( m_controller && m_controller->type() != Controller::ControllerType::Dummy )
 	{
 		m_controller->removeConnection( this );
+		Controller::requestGuiUpdate();
 	}
 
 	if( !_controller )
@@ -124,6 +125,7 @@ void ControllerConnection::setController( Controller * _controller )
 		_controller->addConnection( this );
 		QObject::connect( _controller, SIGNAL(valueChanged()),
 				this, SIGNAL(valueChanged()), Qt::DirectConnection );
+		Controller::requestGuiUpdate();
 	}
 
 	m_ownsController =

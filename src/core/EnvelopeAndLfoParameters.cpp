@@ -352,7 +352,14 @@ void EnvelopeAndLfoParameters::saveSettings( QDomDocument & _doc,
 	m_lfoAmountModel.saveSettings( _doc, _parent, "lamt" );
 	m_x100Model.saveSettings( _doc, _parent, "x100" );
 	m_controlEnvAmountModel.saveSettings( _doc, _parent, "ctlenvamt" );
-	_parent.setAttribute("userwavefile", m_userWave->audioFile());
+	if( m_userWave && !m_userWave->audioFile().isEmpty() )
+	{
+		_parent.setAttribute("userwavefile", m_userWave->audioFile());
+	}
+	else if( m_userWave && !m_userWave->empty() )
+	{
+		_parent.setAttribute("userwavebase64", m_userWave->toBase64());
+	}
 }
 
 
@@ -391,6 +398,10 @@ void EnvelopeAndLfoParameters::loadSettings( const QDomElement & _this )
 			m_userWave = SampleBuffer::fromFile(_this.attribute("userwavefile"));
 		}
 		else { Engine::getSong()->collectError(QString("%1: %2").arg(tr("Sample not found"), userWaveFile)); }  
+	}
+	else if (const auto userWaveBase64 = _this.attribute("userwavebase64"); !userWaveBase64.isEmpty())
+	{
+		m_userWave = SampleBuffer::fromBase64(userWaveBase64);
 	}
 
 	updateSampleVars();

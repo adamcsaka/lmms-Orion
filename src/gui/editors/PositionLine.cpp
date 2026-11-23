@@ -73,7 +73,8 @@ void PositionLine::paintEvent(QPaintEvent* pe)
 		// If gradient is enabled, we're in focus and we're playing, enable gradient
 		if (m_hasTailGradient &&
 			Engine::getSong()->isPlaying() &&
-			(Engine::getSong()->playMode() == m_playMode))
+			(Engine::getSong()->playMode() == m_playMode ||
+			 (m_playMode == Song::PlayMode::MidiClip && Engine::getSong()->playMode() == Song::PlayMode::Pattern)))
 		{
 			c.setAlpha(60);
 			gradient.setColorAt(w, c);

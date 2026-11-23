@@ -102,13 +102,14 @@ void MidiClipView::changeStepCount()
 {
 	if (!m_clip) { return; }
 	bool ok = false;
-	int newSteps = QInputDialog::getInt(
+	double currentSteps = static_cast<double>(m_clip->fractionalSteps());
+	double newSteps = QInputDialog::getDouble(
 		this, tr("Set track steps"),
-		tr("Number of steps for this track (e.g. 12 for 3/4, 7 for 7/8):"),
-		m_clip->steps(), 1, 1024, 1, &ok );
+		tr("Number of steps for this track (e.g. 1, 2, 3 in 4/4, 12 for 3/4, or decimals like 2.5):"),
+		currentSteps, 0.25, 1024.0, 2, &ok );
 	if (ok)
 	{
-		m_clip->setSteps(newSteps);
+		m_clip->setFractionalSteps(static_cast<float>(newSteps));
 	}
 }
 
@@ -243,9 +244,28 @@ void MidiClipView::constructContextMenu( QMenu * _cm )
 
 	_cm->addAction(embed::getIconPixmap("clear_notes_out_of_bounds"), tr("Clear notes out of bounds"), [this]() { bulkClearNotesOutOfBounds(getClickedClips()); });
 
+	_cm->addAction(embed::getIconPixmap("edit_copy"), tr("Duplicate Content (2x)"), this, &MidiClipView::duplicateClipContent);
+	_cm->addAction(embed::getIconPixmap("scale"), tr("Scale Content (%)"), this, &MidiClipView::scaleClipContent);
+
 	if (!isBeat)
 	{
 		_cm->addAction(embed::getIconPixmap("scale"), tr("Transpose"), this, &MidiClipView::transposeSelection);
+		_cm->addAction(embed::getIconPixmap("arp_up_and_down"), tr("Flip horizontally (Retrograde) [X]"), [this]() {
+			if (m_clip)
+			{
+				auto pRoll = getGUI()->pianoRoll();
+				pRoll->setCurrentMidiClip(m_clip);
+				pRoll->flipHorizontally();
+			}
+		});
+		_cm->addAction(embed::getIconPixmap("arp_down"), tr("Invert vertically (Inversion) [Y]"), [this]() {
+			if (m_clip)
+			{
+				auto pRoll = getGUI()->pianoRoll();
+				pRoll->setCurrentMidiClip(m_clip);
+				pRoll->invertVertically();
+			}
+		});
 	}
 	_cm->addSeparator();
 
@@ -255,7 +275,7 @@ void MidiClipView::constructContextMenu( QMenu * _cm )
 						tr( "Change name" ),
 						this, SLOT(changeName()));
 
-	if (isBeat)
+	if (isBeat || (m_clip && m_clip->isInPattern()))
 	{
 		_cm->addSeparator();
 
@@ -434,6 +454,27 @@ void MidiClipView::bulkClearNotesOutOfBounds(QVector<ClipView*> clipvs)
 	getGUI()->songEditor()->update();
 }
 
+void MidiClipView::duplicateClipContent()
+{
+	if (m_clip)
+	{
+		m_clip->duplicateContent();
+		update();
+	}
+}
+
+void MidiClipView::scaleClipContent()
+{
+	if (!m_clip) { return; }
+	bool ok = false;
+	double pct = QInputDialog::getDouble(this, tr("Scale Clip Content"), tr("Scale percentage:"), 100.0, 1.0, 1000.0, 1, &ok);
+	if (ok && pct > 0.0)
+	{
+		m_clip->scaleContent(static_cast<float>(pct));
+		update();
+	}
+}
+
 
 void MidiClipView::mousePressEvent( QMouseEvent * _me )
 {
@@ -500,10 +541,7 @@ void MidiClipView::mouseDoubleClickEvent(QMouseEvent *_me)
 		_me->ignore();
 		return;
 	}
-	if( m_clip->m_clipType == MidiClip::Type::MelodyClip || !fixedClips() )
-	{
-		openInPianoRoll();
-	}
+	openInPianoRoll();
 }
 
 

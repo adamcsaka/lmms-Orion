@@ -65,6 +65,8 @@ public:
 
 	void processAudio( SampleFrame* _out );
 
+	void randomize();
+
 	inline Master * master()
 	{
 		return m_master;

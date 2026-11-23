@@ -50,11 +50,13 @@ public:
 
 protected:
 	void mousePressEvent(QMouseEvent* me) override;
+	void contextMenuEvent(QContextMenuEvent* ce) override;
 	void paintEvent(QPaintEvent* pe) override;
 
 private:
 	void drawInfoText(const EnvelopeAndLfoParameters&);
 	void toggleAmountModel();
+	void randomizeUserWave(int type);
 
 private:
 	QPixmap m_lfoGraph = embed::getIconPixmap("lfo_graph");

@@ -58,8 +58,11 @@ protected slots:
 	void changeName();
 	void disconnectObject( QAction * _a );
 	void toggleRecording();
+	void changeStepCount();
 	void flipY();
 	void flipX();
+	void duplicateClipContent();
+	void scaleClipContent();
 
 protected:
 	void constructContextMenu( QMenu * ) override;

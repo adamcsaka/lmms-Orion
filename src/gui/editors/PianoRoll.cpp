@@ -40,6 +40,8 @@
 #include <QPointer>
 #include <QPushButton>
 #include <QScrollBar>
+#include <QSpinBox>
+#include <QDoubleSpinBox>
 #include <QStyleOption>
 #include <QToolButton>
 
@@ -151,7 +153,8 @@ std::array<PianoRoll::KeyType, 12> PianoRoll::prKeyOrder
 const int DEFAULT_PR_PPB = DEFAULT_CELL_WIDTH * DefaultStepsPerBar;
 
 const std::vector<float> PianoRoll::m_zoomLevels =
-		{0.125f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f, 4.0f, 8.0f};
+		{0.03125f, 0.0625f, 0.125f, 0.1875f, 0.25f, 0.35f, 0.5f, 0.65f, 0.75f, 0.85f, 1.0f,
+		 1.25f, 1.5f, 1.75f, 2.0f, 2.5f, 3.0f, 4.0f, 5.0f, 6.0f, 8.0f, 10.0f, 12.0f, 16.0f};
 
 const std::vector<float> PianoRoll::m_zoomYLevels =
 		{0.25f, 0.5f, 1.0f, 1.5f, 2.0f, 2.5f, 3.0f, 4.0f};
@@ -299,13 +302,9 @@ PianoRoll::PianoRoll() :
 	connect( &m_stepRecorderWidget, SIGNAL( positionChanged( const lmms::TimePos& ) ),
 			this, SLOT( updatePositionStepRecording( const lmms::TimePos& ) ) );
 
-	// update timeline when in record-accompany mode
+	// update timeline when in record-accompany or pattern play mode
 	connect(&Engine::getSong()->getTimeline(Song::PlayMode::Song), &Timeline::positionChanged, this, &PianoRoll::updatePositionAccompany);
-	// TODO
-/*	connect( engine::getSong()->getPlayPos( Song::PlayMode::Pattern ).m_timeLine,
-				SIGNAL( positionChanged( const lmms::TimePos& ) ),
-			this,
-			SLOT( updatePositionAccompany( const lmms::TimePos& ) ) );*/
+	connect(&Engine::getSong()->getTimeline(Song::PlayMode::Pattern), &Timeline::positionChanged, this, &PianoRoll::updatePositionAccompany);
 
 	removeSelection();
 
@@ -1285,6 +1284,74 @@ void PianoRoll::shiftPos(const NoteVector& notes, int amount)
 
 
 
+void PianoRoll::flipHorizontally()
+{
+	if (!hasValidMidiClip()) { return; }
+	auto selectedNotes = getSelectedNotes();
+	if (selectedNotes.empty()) { flipHorizontally(m_midiClip->notes()); }
+	else { flipHorizontally(selectedNotes); }
+}
+
+void PianoRoll::flipHorizontally(const NoteVector& notes)
+{
+	if (notes.empty()) { return; }
+	m_midiClip->addJournalCheckPoint();
+
+	tick_t minPos = notes.front()->pos().getTicks();
+	tick_t maxEnd = notes.front()->endPos().getTicks();
+	for (const Note* n : notes)
+	{
+		minPos = std::min(minPos, n->pos().getTicks());
+		maxEnd = std::max(maxEnd, n->endPos().getTicks());
+	}
+
+	for (Note* n : notes)
+	{
+		tick_t newPos = minPos + (maxEnd - n->endPos().getTicks());
+		n->setPos(newPos);
+	}
+
+	m_midiClip->rearrangeAllNotes();
+	m_midiClip->dataChanged();
+	update();
+	getGUI()->songEditor()->update();
+}
+
+void PianoRoll::invertVertically()
+{
+	if (!hasValidMidiClip()) { return; }
+	auto selectedNotes = getSelectedNotes();
+	if (selectedNotes.empty()) { invertVertically(m_midiClip->notes()); }
+	else { invertVertically(selectedNotes); }
+}
+
+void PianoRoll::invertVertically(const NoteVector& notes)
+{
+	if (notes.empty()) { return; }
+	m_midiClip->addJournalCheckPoint();
+
+	int minKey = notes.front()->key();
+	int maxKey = notes.front()->key();
+	for (const Note* n : notes)
+	{
+		minKey = std::min(minKey, n->key());
+		maxKey = std::max(maxKey, n->key());
+	}
+	int centerSum = minKey + maxKey;
+
+	for (Note* n : notes)
+	{
+		int newKey = std::clamp(centerSum - n->key(), 0, 127);
+		n->setKey(newKey);
+	}
+
+	m_midiClip->rearrangeAllNotes();
+	m_midiClip->dataChanged();
+	update();
+	getGUI()->songEditor()->update();
+}
+
+
 bool PianoRoll::isSelection() const // are any notes selected?
 {
 	for( const Note *note : m_midiClip->notes() )
@@ -1320,7 +1387,7 @@ void PianoRoll::keyPressEvent(QKeyEvent* ke)
 		}
 	}
 
-	if( hasValidMidiClip() && ke->modifiers() == Qt::NoModifier )
+	if( m_typingKeyboardEnabled && hasValidMidiClip() && ke->modifiers() == Qt::NoModifier )
 	{
 		const int key_num = PianoView::getKeyFromKeyEvent( ke );
 
@@ -1491,6 +1558,25 @@ void PianoRoll::keyPressEvent(QKeyEvent* ke)
 			ke->accept();
 			break;
 
+		case Qt::Key_X:
+			if (hasValidMidiClip() && m_action == Action::None && (ke->modifiers() == Qt::NoModifier || ke->modifiers() == Qt::ShiftModifier || ke->modifiers() == Qt::AltModifier))
+			{
+				flipHorizontally();
+				ke->accept();
+				return;
+			}
+			break;
+
+		case Qt::Key_Y:
+		case Qt::Key_Z:
+			if (hasValidMidiClip() && m_action == Action::None && (ke->modifiers() == Qt::NoModifier || ke->modifiers() == Qt::ShiftModifier || ke->modifiers() == Qt::AltModifier))
+			{
+				invertVertically();
+				ke->accept();
+				return;
+			}
+			break;
+
 		case Qt::Key_Home:
 			m_timeLine->timeline()->setTicks(0);
 			Engine::getSong()->setPlayPos(0, Song::PlayMode::None);
@@ -1558,7 +1644,7 @@ void PianoRoll::keyPressEvent(QKeyEvent* ke)
 
 void PianoRoll::keyReleaseEvent(QKeyEvent* ke )
 {
-	if( hasValidMidiClip() && ke->modifiers() == Qt::NoModifier )
+	if( m_typingKeyboardEnabled && hasValidMidiClip() && ke->modifiers() == Qt::NoModifier )
 	{
 		const int key_num = PianoView::getKeyFromKeyEvent( ke );
 		if (!ke->isAutoRepeat() && key_num > -1)
@@ -4058,8 +4144,10 @@ void PianoRoll::resizeEvent(QResizeEvent* re)
 
 void PianoRoll::adjustLeftRightScoll(int value)
 {
-	m_leftRightScroll->setValue(m_leftRightScroll->value() -
-							value * 0.3f / m_zoomLevels[m_zoomingModel.value()]);
+	float zoomFactor = std::max(0.25f, m_zoomLevels[m_zoomingModel.value()]);
+	int delta = static_cast<int>(std::round((value * 0.15f) / zoomFactor));
+	delta = std::clamp(delta, -100, 100);
+	m_leftRightScroll->setValue(m_leftRightScroll->value() - delta);
 }
 
 
@@ -4907,23 +4995,32 @@ void PianoRoll::updatePositionLineHeight()
 
 void PianoRoll::updatePositionAccompany()
 {
-	const TimePos& t = Engine::getSong()->getPlayPos(Song::PlayMode::Song);
 	Song * s = Engine::getSong();
-
-	if( m_recording && hasValidMidiClip() &&
-					s->playMode() != Song::PlayMode::MidiClip )
+	if( !hasValidMidiClip() || !s->isPlaying() )
 	{
-		TimePos pos = t;
-		if (s->playMode() != Song::PlayMode::Pattern)
+		return;
+	}
+
+	if( s->playMode() == Song::PlayMode::Pattern )
+	{
+		TimePos pos = s->getPlayPos(Song::PlayMode::Pattern);
+		if( m_midiClip->length() > 0 )
 		{
-			pos -= m_midiClip->startPosition() + m_midiClip->startTimeOffset();
+			pos = pos % m_midiClip->length();
 		}
-		if( (int) pos > 0 )
+		m_timeLine->timeline()->setTicks(pos, false);
+		autoScroll( pos );
+		m_positionLine->update();
+	}
+	else if( s->playMode() == Song::PlayMode::Song )
+	{
+		TimePos pos = s->getPlayPos(Song::PlayMode::Song);
+		pos -= m_midiClip->startPosition() + m_midiClip->startTimeOffset();
+		if( (int) pos >= 0 && (m_recording || (pos < m_midiClip->length())) )
 		{
-			// Passing false to prevent any `positionJumped` signals from being emitted, since this movement is supposed
-			// to be smoothly tracking the Song's timeline, not the from user forcefully dragging it.
 			m_timeLine->timeline()->setTicks(pos, false);
 			autoScroll( pos );
+			m_positionLine->update();
 		}
 	}
 }
@@ -5230,6 +5327,15 @@ PianoRollWindow::PianoRollWindow() :
 	notesActionsToolBar->addSeparator();
 	notesActionsToolBar->addWidget(quantizeButton);
 
+	auto toggleKeyboardAction = notesActionsToolBar->addAction(
+		embed::getIconPixmap("piano"),
+		tr("Toggle computer keyboard note input (disable to use single-key shortcuts like X, Y)"));
+	toggleKeyboardAction->setCheckable(true);
+	toggleKeyboardAction->setChecked(m_editor->isTypingKeyboardEnabled());
+	connect(toggleKeyboardAction, &QAction::toggled, [this](bool checked) {
+		m_editor->setTypingKeyboardEnabled(checked);
+	});
+
 	// -- File actions
 	DropToolBar* fileActionsToolBar = addDropToolBarToTop(tr("File actions"));
 
@@ -5311,6 +5417,12 @@ PianoRollWindow::PianoRollWindow() :
 	connect(reverseAction, &QAction::triggered, [this](){ m_editor->reverseNotes(); });
 	reverseAction->setShortcut(keySequence(Qt::SHIFT, Qt::Key_R));
 
+	auto flipHorizAction = new QAction(embed::getIconPixmap("flip_x"), tr("Flip Horizontally (Retrograde) (X)"), noteToolsButton);
+	connect(flipHorizAction, &QAction::triggered, [this](){ m_editor->flipHorizontally(); });
+
+	auto flipVertAction = new QAction(embed::getIconPixmap("flip_y"), tr("Flip Vertically (Invert) (Y)"), noteToolsButton);
+	connect(flipVertAction, &QAction::triggered, [this](){ m_editor->invertVertically(); });
+
 	noteToolsButton->addAction(glueAction);
 	noteToolsButton->addAction(knifeAction);
 	noteToolsButton->addAction(strumAction);
@@ -5319,6 +5431,8 @@ PianoRollWindow::PianoRollWindow() :
 	noteToolsButton->addAction(minLengthAction);
 	noteToolsButton->addAction(maxLengthAction);
 	noteToolsButton->addAction(reverseAction);
+	noteToolsButton->addAction(flipHorizAction);
+	noteToolsButton->addAction(flipVertAction);
 
 	notesActionsToolBar->addWidget(noteToolsButton);
 
@@ -5470,6 +5584,35 @@ PianoRollWindow::PianoRollWindow() :
 	zoomAndNotesToolBar->addSeparator();
 	zoomAndNotesToolBar->addWidget(snapWidget);
 
+	DropToolBar* stepsToolBar = addDropToolBarToTop(tr("Step controls"));
+	auto stepsWidget = new QWidget(stepsToolBar);
+	auto stepsHbox = new QHBoxLayout(stepsWidget);
+	stepsHbox->setContentsMargins(0, 0, 0, 0);
+	stepsHbox->setSpacing(4);
+	auto stepsLbl = new QLabel(tr("Steps:"), stepsWidget);
+	m_stepsSpinBox = new QDoubleSpinBox(stepsWidget);
+	m_stepsSpinBox->setRange(0.25, 1024.0);
+	m_stepsSpinBox->setSingleStep(1.0);
+	m_stepsSpinBox->setDecimals(2);
+	m_stepsSpinBox->setValue(16.0);
+	m_stepsSpinBox->setToolTip(tr("Pattern step count for current clip (supports fractions like 1, 2, 3 in 4/4 or decimals)"));
+	stepsHbox->addWidget(stepsLbl);
+	stepsHbox->addWidget(m_stepsSpinBox);
+	stepsWidget->setLayout(stepsHbox);
+	stepsToolBar->addWidget(stepsWidget);
+
+	connect(m_stepsSpinBox, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double steps) {
+		if (m_editor->hasValidMidiClip() && std::abs(m_editor->currentMidiClip()->fractionalSteps() - steps) > 0.001)
+		{
+			const_cast<MidiClip*>(m_editor->currentMidiClip())->setFractionalSteps(static_cast<float>(steps));
+		}
+	});
+
+	m_removeStepsAction = stepsToolBar->addAction(embed::getIconPixmap("step_btn_remove"), tr("Remove steps (-1 Bar)"), this, &PianoRollWindow::removeSteps);
+	m_addStepsAction = stepsToolBar->addAction(embed::getIconPixmap("step_btn_add"), tr("Add steps (+1 Bar)"), this, &PianoRollWindow::addSteps);
+	m_duplicateAction = stepsToolBar->addAction(embed::getIconPixmap("step_btn_duplicate"), tr("Double content (x2)"), this, &PianoRollWindow::duplicateContent);
+	m_halveAction = stepsToolBar->addAction(embed::getIconPixmap("step_btn_remove"), tr("Halve content (/2)"), this, &PianoRollWindow::halveContent);
+
 	// setup our actual window
 	setFocusPolicy( Qt::StrongFocus );
 	setFocus();
@@ -5487,6 +5630,46 @@ PianoRollWindow::PianoRollWindow() :
 const MidiClip* PianoRollWindow::currentMidiClip() const
 {
 	return m_editor->currentMidiClip();
+}
+
+void PianoRollWindow::addSteps()
+{
+	if (m_editor->hasValidMidiClip())
+	{
+		auto* clip = const_cast<MidiClip*>(m_editor->currentMidiClip());
+		clip->addSteps();
+		if (m_stepsSpinBox) { m_stepsSpinBox->setValue(clip->fractionalSteps()); }
+	}
+}
+
+void PianoRollWindow::removeSteps()
+{
+	if (m_editor->hasValidMidiClip())
+	{
+		auto* clip = const_cast<MidiClip*>(m_editor->currentMidiClip());
+		clip->removeSteps();
+		if (m_stepsSpinBox) { m_stepsSpinBox->setValue(clip->fractionalSteps()); }
+	}
+}
+
+void PianoRollWindow::duplicateContent()
+{
+	if (m_editor->hasValidMidiClip())
+	{
+		auto* clip = const_cast<MidiClip*>(m_editor->currentMidiClip());
+		clip->duplicateContent();
+		if (m_stepsSpinBox) { m_stepsSpinBox->setValue(clip->fractionalSteps()); }
+	}
+}
+
+void PianoRollWindow::halveContent()
+{
+	if (m_editor->hasValidMidiClip())
+	{
+		auto* clip = const_cast<MidiClip*>(m_editor->currentMidiClip());
+		clip->scaleContent(50.0f);
+		if (m_stepsSpinBox) { m_stepsSpinBox->setValue(clip->fractionalSteps()); }
+	}
 }
 
 
@@ -5524,6 +5707,22 @@ void PianoRollWindow::setCurrentMidiClip( MidiClip* clip )
 bool PianoRollWindow::isRecording() const
 {
 	return m_editor->isRecording();
+}
+
+
+
+
+void PianoRollWindow::flipHorizontally()
+{
+	if (m_editor) { m_editor->flipHorizontally(); }
+}
+
+
+
+
+void PianoRollWindow::invertVertically()
+{
+	if (m_editor) { m_editor->invertVertically(); }
 }
 
 
@@ -5741,6 +5940,28 @@ void PianoRollWindow::updateAfterMidiClipChange()
 {
 	setEnabled(m_editor->hasValidMidiClip());
 	m_editor->m_timeLine->setVisible(m_editor->hasValidMidiClip());
+
+	if (m_stepsSpinBox)
+	{
+		if (m_editor->hasValidMidiClip())
+		{
+			QSignalBlocker blocker(m_stepsSpinBox);
+			m_stepsSpinBox->setEnabled(true);
+			m_stepsSpinBox->setValue(m_editor->currentMidiClip()->fractionalSteps());
+			if (m_removeStepsAction) { m_removeStepsAction->setEnabled(true); }
+			if (m_addStepsAction) { m_addStepsAction->setEnabled(true); }
+			if (m_duplicateAction) { m_duplicateAction->setEnabled(true); }
+			if (m_halveAction) { m_halveAction->setEnabled(true); }
+		}
+		else
+		{
+			m_stepsSpinBox->setEnabled(false);
+			if (m_removeStepsAction) { m_removeStepsAction->setEnabled(false); }
+			if (m_addStepsAction) { m_addStepsAction->setEnabled(false); }
+			if (m_duplicateAction) { m_duplicateAction->setEnabled(false); }
+			if (m_halveAction) { m_halveAction->setEnabled(false); }
+		}
+	}
 
 	clipRenamed();
 	updateStepRecordingIcon(); //MIDI clip change turn step recording OFF - update icon accordingly

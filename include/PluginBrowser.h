@@ -32,6 +32,11 @@
 
 class QTreeWidget;
 
+namespace lmms
+{
+class TrackContainer;
+}
+
 namespace lmms::gui
 {
 
@@ -63,6 +68,7 @@ public:
 	PluginDescWidget( const PluginKey & _pk, QWidget * _parent );
 	QString name() const;
 	void openInNewInstrumentTrack(QString value);
+	void openInTrackContainer(lmms::TrackContainer* tc, QString value);
 
 protected:
 #if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
@@ -72,6 +78,7 @@ protected:
 #endif
 	void leaveEvent( QEvent * _e ) override;
 	void mousePressEvent( QMouseEvent * _me ) override;
+	void mouseDoubleClickEvent( QMouseEvent * _me ) override;
 	void paintEvent( QPaintEvent * _pe ) override;
 	void contextMenuEvent(QContextMenuEvent* e) override;
 

@@ -700,9 +700,14 @@ void FileBrowserTreeWidget::openInSlicerT(FileItem* item, bool songEditor)
 	if (!songEditor) { tc = Engine::patternStore(); }
 
 	auto* track = dynamic_cast<InstrumentTrack*>(Track::create(Track::Type::Instrument, tc));
-
-	track->loadInstrument("slicert");
-	track->instrument()->loadFile(item->fullName());
+	if (track)
+	{
+		track->loadInstrument("slicert");
+		if (track->instrument())
+		{
+			track->instrument()->loadFile(item->fullName());
+		}
+	}
 }
 
 QList<QAction*> FileBrowserTreeWidget::getContextActions(FileItem* file, bool songEditor)

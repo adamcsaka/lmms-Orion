@@ -227,6 +227,12 @@ public:
 	bool isRecording() const { return m_isRecording; }
 	void setRecording( const bool b ) { m_isRecording = b; }
 
+	int steps() const { return m_steps; }
+	void setSteps( int steps );
+	float fractionalSteps() const { return m_fractionalSteps > 0.0f ? m_fractionalSteps : static_cast<float>(m_steps); }
+	void setFractionalSteps( float steps );
+	void shiftNodes( int deltaTicks );
+
 	static int quantization() { return s_quantization; }
 	static void setQuantization(int q) { s_quantization = q; }
 
@@ -239,6 +245,8 @@ public:
 
 public slots:
 	void clear();
+	void duplicateContent();
+	void scaleContent( float percentage );
 	void objectDestroyed( lmms::jo_id_t );
 	void flipY( int min, int max );
 	void flipY();
@@ -283,6 +291,8 @@ private:
 	float m_dragOutTan; // The dragged node's outTangent
 
 	bool m_isRecording;
+	int m_steps;
+	float m_fractionalSteps = 0.0f;
 	float m_lastRecordedValue;
 
 	static int s_quantization;

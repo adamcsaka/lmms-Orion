@@ -44,6 +44,7 @@ class QPushButton;
 class QScrollBar;
 class QMenu;
 class QToolButton;
+class QDoubleSpinBox;
 
 namespace lmms
 {
@@ -149,6 +150,16 @@ public:
 	bool hasValidMidiClip() const
 	{
 		return m_midiClip != nullptr;
+	}
+
+	bool isTypingKeyboardEnabled() const
+	{
+		return m_typingKeyboardEnabled;
+	}
+
+	void setTypingKeyboardEnabled(bool enabled)
+	{
+		m_typingKeyboardEnabled = enabled;
 	}
 	
 	int trackOctaveSize() const;
@@ -312,6 +323,10 @@ private:
 	void shiftPos(const NoteVector& notes, int amount);
 	void shiftSemiTone(int amount);
 	void shiftSemiTone(const NoteVector& notes, int amount);
+	void flipHorizontally();
+	void flipHorizontally(const NoteVector& notes);
+	void invertVertically();
+	void invertVertically(const NoteVector& notes);
 	bool isSelection() const;
 	int selectionCount() const;
 	void testPlayNote( Note * n );
@@ -513,6 +528,7 @@ private:
 
 	friend class PianoRollWindow;
 
+	bool m_typingKeyboardEnabled = false;
 	StepRecorderWidget m_stepRecorderWidget;
 	StepRecorder m_stepRecorder;
 
@@ -569,6 +585,9 @@ public:
 	void setCurrentMidiClip( MidiClip* clip );
 	void setGhostMidiClip( MidiClip* clip );
 
+	void flipHorizontally();
+	void invertVertically();
+
 	int quantization() const;
 
 	void play() override;
@@ -595,6 +614,12 @@ public:
 
 	QSize sizeHint() const override;
 	bool hasFocus() const;
+
+public slots:
+	void addSteps();
+	void removeSteps();
+	void duplicateContent();
+	void halveContent();
 
 signals:
 	void currentMidiClipChanged();
@@ -626,6 +651,11 @@ private:
 	ComboBox * m_chordComboBox;
 	ComboBox* m_snapComboBox;
 	QPushButton * m_clearGhostButton;
+	QDoubleSpinBox* m_stepsSpinBox;
+	QAction* m_addStepsAction;
+	QAction* m_removeStepsAction;
+	QAction* m_duplicateAction;
+	QAction* m_halveAction;
 
 };
 

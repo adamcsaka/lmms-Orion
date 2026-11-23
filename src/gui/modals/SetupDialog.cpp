@@ -116,6 +116,7 @@ SetupDialog::SetupDialog(ConfigTab tab_to_open) :
 			"app", "disablebackup").toInt()),
 	m_openLastProject(ConfigManager::inst()->value(
 			"app", "openlastproject").toInt()),
+	m_applyProjectThemes(ConfigManager::inst()->applyProjectThemes()),
 	m_detachBehavior{ConfigManager::inst()->value("ui", "detachbehavior", "show")},
 	m_loopMarkerMode{ConfigManager::inst()->value("app", "loopmarkermode", "dual")},
 	m_autoScroll(ConfigManager::inst()->value("ui", "autoscroll", "stepped")),
@@ -254,6 +255,8 @@ SetupDialog::SetupDialog(ConfigTab tab_to_open) :
 		m_trackDeletionWarning, SLOT(toggleTrackDeletionWarning(bool)), false);
 	addCheckBox(tr("Show warning when deleting a mixer channel that is in use"), guiGroupBox, guiGroupLayout,
 		m_mixerChannelDeletionWarning,	SLOT(toggleMixerChannelDeletionWarning(bool)), false);
+	addCheckBox(tr("Apply project-specific themes on load"), guiGroupBox, guiGroupLayout,
+		m_applyProjectThemes, SLOT(toggleApplyProjectThemes(bool)), false);
 
 	m_detachBehaviorComboBox = new QComboBox{guiGroupBox};
 
@@ -989,6 +992,7 @@ void SetupDialog::accept()
 					QString::number(!m_disableBackup));
 	ConfigManager::inst()->setValue("app", "openlastproject",
 					QString::number(m_openLastProject));
+	ConfigManager::inst()->setApplyProjectThemes(m_applyProjectThemes);
 	ConfigManager::inst()->setValue("ui", "detachbehavior", m_detachBehavior);
 	ConfigManager::inst()->setValue("app", "loopmarkermode", m_loopMarkerMode);
 	ConfigManager::inst()->setValue("app", "language", m_lang);
@@ -1127,6 +1131,12 @@ void SetupDialog::toggleDisableBackup(bool enabled)
 void SetupDialog::toggleOpenLastProject(bool enabled)
 {
 	m_openLastProject = enabled;
+}
+
+
+void SetupDialog::toggleApplyProjectThemes(bool enabled)
+{
+	m_applyProjectThemes = enabled;
 }
 
 

@@ -27,6 +27,13 @@
 #include <algorithm>
 #include <cmath>
 
+#if defined(_M_X64) || defined(__x86_64__) || defined(_M_IX86) || defined(__i386__)
+#include <immintrin.h>
+#ifdef _MSC_VER
+#include <intrin.h>
+#endif
+#endif
+
 #include "ValueBuffer.h"
 #include "SampleFrame.h"
 
@@ -34,6 +41,27 @@ namespace lmms::MixHelpers
 {
 
 namespace {
+
+struct CpuFeatures
+{
+	bool hasAVX2 = false;
+
+	CpuFeatures()
+	{
+#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+		int cpuInfo[4] = {0};
+		__cpuid(cpuInfo, 0);
+		int nIds = cpuInfo[0];
+		if (nIds >= 7)
+		{
+			__cpuidex(cpuInfo, 7, 0);
+			hasAVX2 = (cpuInfo[1] & (1 << 5)) != 0;
+		}
+#endif
+	}
+};
+
+static const CpuFeatures s_cpu;
 
 constexpr auto SilenceThreshold = 0.000001f; // -120 dBFS
 
@@ -80,7 +108,36 @@ struct AddOp
 
 void add( SampleFrame* dst, const SampleFrame* src, int frames )
 {
-	run<>( dst, src, frames, AddOp() );
+	const int totalFloats = frames * 2;
+	auto* d = reinterpret_cast<float*>(dst);
+	const auto* s = reinterpret_cast<const float*>(src);
+	int i = 0;
+
+#if defined(_M_X64) || defined(__x86_64__) || defined(_M_IX86) || defined(__i386__)
+	if (s_cpu.hasAVX2)
+	{
+		for (; i + 8 <= totalFloats; i += 8)
+		{
+			__m256 vd = _mm256_loadu_ps(d + i);
+			__m256 vs = _mm256_loadu_ps(s + i);
+			_mm256_storeu_ps(d + i, _mm256_add_ps(vd, vs));
+		}
+	}
+	else
+	{
+		for (; i + 4 <= totalFloats; i += 4)
+		{
+			__m128 vd = _mm_loadu_ps(d + i);
+			__m128 vs = _mm_loadu_ps(s + i);
+			_mm_storeu_ps(d + i, _mm_add_ps(vd, vs));
+		}
+	}
+#endif
+
+	for (; i < totalFloats; ++i)
+	{
+		d[i] += s[i];
+	}
 }
 
 
@@ -118,7 +175,38 @@ struct AddMultipliedOp
 
 void addMultiplied( SampleFrame* dst, const SampleFrame* src, float coeffSrc, int frames )
 {
-	run<>( dst, src, frames, AddMultipliedOp(coeffSrc) );
+	const int totalFloats = frames * 2;
+	auto* d = reinterpret_cast<float*>(dst);
+	const auto* s = reinterpret_cast<const float*>(src);
+	int i = 0;
+
+#if defined(_M_X64) || defined(__x86_64__) || defined(_M_IX86) || defined(__i386__)
+	if (s_cpu.hasAVX2)
+	{
+		__m256 vc = _mm256_set1_ps(coeffSrc);
+		for (; i + 8 <= totalFloats; i += 8)
+		{
+			__m256 vd = _mm256_loadu_ps(d + i);
+			__m256 vs = _mm256_loadu_ps(s + i);
+			_mm256_storeu_ps(d + i, _mm256_add_ps(vd, _mm256_mul_ps(vs, vc)));
+		}
+	}
+	else
+	{
+		__m128 vc = _mm_set1_ps(coeffSrc);
+		for (; i + 4 <= totalFloats; i += 4)
+		{
+			__m128 vd = _mm_loadu_ps(d + i);
+			__m128 vs = _mm_loadu_ps(s + i);
+			_mm_storeu_ps(d + i, _mm_add_ps(vd, _mm_mul_ps(vs, vc)));
+		}
+	}
+#endif
+
+	for (; i < totalFloats; ++i)
+	{
+		d[i] += s[i] * coeffSrc;
+	}
 }
 
 
@@ -137,9 +225,34 @@ struct AddSwappedMultipliedOp
 
 void multiply(SampleFrame* dst, float coeff, int frames)
 {
-	for (int i = 0; i < frames; ++i)
+	const int totalFloats = frames * 2;
+	auto* d = reinterpret_cast<float*>(dst);
+	int i = 0;
+
+#if defined(_M_X64) || defined(__x86_64__) || defined(_M_IX86) || defined(__i386__)
+	if (s_cpu.hasAVX2)
 	{
-		dst[i] *= coeff;
+		__m256 vc = _mm256_set1_ps(coeff);
+		for (; i + 8 <= totalFloats; i += 8)
+		{
+			__m256 vd = _mm256_loadu_ps(d + i);
+			_mm256_storeu_ps(d + i, _mm256_mul_ps(vd, vc));
+		}
+	}
+	else
+	{
+		__m128 vc = _mm_set1_ps(coeff);
+		for (; i + 4 <= totalFloats; i += 4)
+		{
+			__m128 vd = _mm_loadu_ps(d + i);
+			_mm_storeu_ps(d + i, _mm_mul_ps(vd, vc));
+		}
+	}
+#endif
+
+	for (; i < totalFloats; ++i)
+	{
+		d[i] *= coeff;
 	}
 }
 

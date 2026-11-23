@@ -204,6 +204,7 @@ void FloatModelEditorBase::mousePressEvent(QMouseEvent * me)
 		AutomatableModel *thisModel = model();
 		if (thisModel)
 		{
+			thisModel->setIsBeingManipulated(true);
 			thisModel->addJournalCheckPoint();
 			thisModel->saveJournallingState(false);
 		}
@@ -255,6 +256,7 @@ void FloatModelEditorBase::mouseReleaseEvent(QMouseEvent* event)
 		AutomatableModel *thisModel = model();
 		if (thisModel)
 		{
+			thisModel->setIsBeingManipulated(false);
 			thisModel->restoreJournallingState();
 		}
 	}
@@ -522,14 +524,7 @@ void FloatModelEditorBase::enterValue()
 
 void FloatModelEditorBase::friendlyUpdate()
 {
-	if (model() == nullptr) { return; }
-
-	// If the controller changes constantly, only repaint every 1024th frame
-	if (model()->useControllerValue()
-		&& model()->controllerConnection()
-		&& model()->controllerConnection()->getController()->frequentUpdates()
-		&& Controller::runningFrames() % (256 * 4) != 0)
-	{ return; }
+	if (model() == nullptr || !isVisible()) { return; }
 
 	// If this float model is currently controlling dynamic floating text...
 	if (floatingTextType() == FloatingTextType::Dynamic)

@@ -25,17 +25,24 @@
 #include "PatternClipView.h"
 
 #include <QApplication>
+#include <QDomDocument>
 #include <QMenu>
 #include <QPainter>
 
+#include "AutomationClip.h"
+#include "AutomationTrack.h"
 #include "Engine.h"
 #include "GuiApplication.h"
+#include "InstrumentTrack.h"
+#include "JournallingObject.h"
 #include "MainWindow.h"
 #include "MidiClip.h"
 #include "PatternClip.h"
 #include "PatternStore.h"
 #include "PatternTrack.h"
 #include "RenameDialog.h"
+#include "Song.h"
+#include "TextFloat.h"
 #include "TrackContainerView.h"
 #include "TrackView.h"
 
@@ -73,6 +80,9 @@ void PatternClipView::constructContextMenu(QMenu* _cm)
 	_cm->addAction( embed::getIconPixmap( "edit_rename" ),
 						tr( "Change name" ),
 						this, SLOT(changeName()));
+	_cm->addAction( embed::getIconPixmap( "edit_copy" ),
+						tr( "Explode Pattern into Song Editor tracks" ),
+						this, SLOT(explodePatternIntoSong()));
 }
 
 
@@ -163,6 +173,16 @@ void PatternClipView::paintEvent(QPaintEvent*)
 	const int verticalNoteSpacing = trackHeight * m_noteVerticalSpacing;
 	const int horizontalNoteSpacing = pixelsPerBar() / TimePos::stepsPerBar() * m_noteHorizontalSpacing;
 
+	// This pixmap is a batching optimization which draws notes into one vertical strip for tiling patterns.
+	QPixmap midiPatternPixmap(pixelsPerPattern, m_paintPixmap.height());
+	midiPatternPixmap.fill(Qt::transparent);
+
+	QPainter pixPainter(&midiPatternPixmap);
+	pixPainter.setPen(Qt::NoPen);
+	const auto noteColor = QColor(m_noteColor.red(), m_noteColor.green(), m_noteColor.blue());
+	pixPainter.setBrush(QBrush(noteColor));
+
+	TimePos longestLength(1);
 	float lastY = height() * m_verticalPadding;
 	for (const auto& track : Engine::patternStore()->tracks())
 	{
@@ -173,26 +193,25 @@ void PatternClipView::paintEvent(QPaintEvent*)
 			continue;
 		}
 
-		// Compare how long the clip view is compared to the underlying pattern. First +1 for ceiling, second +1 for possible previous bar.
-		const int maxPossibleRepetions = getClip()->length() / mClip->length() + 1 + 1;
+		longestLength = std::max(longestLength, mClip->length());
 		for (const Note* note : mClip->notes())
 		{
 			QRect noteRect = QRect(
-				note->pos() * pixelsPerBar() / TimePos::ticksPerBar() + offset + horizontalNoteSpacing / 2,
+				note->pos() * pixelsPerBar() / TimePos::ticksPerBar(),
 				lastY + verticalNoteSpacing / 2,
 				std::max(1.0f, pixelsPerBar() / TimePos::stepsPerBar() - horizontalNoteSpacing),
 				std::max(1.0f, trackHeight - verticalNoteSpacing)
 			);
-			// Loop through all the possible bars this pattern could affect. Starting at -1 for the possibility of start offset
-			const auto noteColor = QColor(m_noteColor.red(), m_noteColor.green(), m_noteColor.blue(), std::clamp(note->getVolume() * 255 / 100, 50, 255));
-			for (int i = -1; i < maxPossibleRepetions - 1; i++)
-			{
-				noteRect.moveLeft(note->pos() * pixelsPerBar() / TimePos::ticksPerBar() + offset + i * pixelsPerPattern + horizontalNoteSpacing / 2);
-				p.fillRect(noteRect, noteColor);
-			}
+			pixPainter.setOpacity(std::clamp(note->getVolume() / 100.0, 0.2, 1.0));
+			pixPainter.drawRect(noteRect);
 		}
+
 		lastY += trackHeight;
 	}
+
+	// Compare how long the longest clip view is compared to the underlying pattern. First +1 for ceiling, second +1 for possible previous bar.
+	const int maxPossibleRepetitions = getClip()->length() / longestLength + 1 + 1;
+	p.drawTiledPixmap(offset + horizontalNoteSpacing / 2 - pixelsPerPattern, 0, width() + (maxPossibleRepetitions - 1) * pixelsPerPattern, height(), midiPatternPixmap);
 	
 	// bar lines
 	const int lineSize = 3;
@@ -274,6 +293,145 @@ void PatternClipView::update()
 	setToolTip(m_patternClip->name());
 
 	ClipView::update();
+}
+
+
+
+
+void PatternClipView::explodePatternIntoSong()
+{
+	if (!m_patternClip || !Engine::getSong() || !Engine::patternStore()) { return; }
+
+	int patternIndex = m_patternClip->patternIndex();
+	TimePos startPos = m_patternClip->startPosition();
+	TimePos clipLength = m_patternClip->length();
+
+	if (clipLength <= 0)
+	{
+		clipLength = Engine::patternStore()->lengthOfPattern(patternIndex);
+	}
+	if (clipLength <= 0) { return; }
+
+	Song* song = Engine::getSong();
+	PatternStore* ps = Engine::patternStore();
+
+	int explodedTracksCount = 0;
+
+	for (Track* psTrack : ps->tracks())
+	{
+		if (patternIndex >= psTrack->numOfClips()) { continue; }
+		Clip* srcClip = psTrack->getClip(patternIndex);
+		if (!srcClip || srcClip->length() <= 0) { continue; }
+
+		auto mc = dynamic_cast<MidiClip*>(srcClip);
+		if (mc && mc->notes().empty()) { continue; }
+
+		auto ac = dynamic_cast<AutomationClip*>(srcClip);
+		if (ac && ac->objects().empty() && ac->getTimeMap().isEmpty()) { continue; }
+
+		Track* destTrack = nullptr;
+
+		// Match or create track in Song Editor
+		if (psTrack->type() == Track::Type::Instrument)
+		{
+			for (Track* st : song->tracks())
+			{
+				if (st->type() == Track::Type::Instrument && st->name() == psTrack->name())
+				{
+					destTrack = st;
+					break;
+				}
+			}
+			if (!destTrack)
+			{
+				QDomDocument doc;
+				QDomElement parent = doc.createElement("clonedtrack");
+				QDomElement trackElement = doc.createElement("track");
+				parent.appendChild(trackElement);
+				psTrack->saveSettings(doc, trackElement);
+				JournallingObject::replaceJournalIDs(parent);
+
+				destTrack = Track::create(trackElement, song);
+				if (destTrack)
+				{
+					while (destTrack->numOfClips() > 0)
+					{
+						delete destTrack->getClip(0);
+					}
+				}
+			}
+		}
+		else if (psTrack->type() == Track::Type::Automation)
+		{
+			for (Track* st : song->tracks())
+			{
+				if (st->type() == Track::Type::Automation)
+				{
+					if (ac && !ac->objects().empty())
+					{
+						for (int c = 0; c < st->numOfClips(); ++c)
+						{
+							auto stAc = dynamic_cast<AutomationClip*>(st->getClip(c));
+							if (stAc && !stAc->objects().empty() && stAc->objects().front() == ac->objects().front())
+							{
+								destTrack = st;
+								break;
+							}
+						}
+					}
+					if (destTrack) break;
+				}
+			}
+			if (!destTrack)
+			{
+				destTrack = Track::create(Track::Type::Automation, song);
+				if (destTrack)
+				{
+					destTrack->setName(psTrack->name());
+				}
+			}
+		}
+
+		if (!destTrack) { continue; }
+
+		TimePos patternLen = srcClip->length();
+		if (patternLen <= 0) { patternLen = DefaultTicksPerBar; }
+
+		int repeats = clipLength.getTicks() / patternLen.getTicks();
+		if (repeats < 1) { repeats = 1; }
+
+		for (int r = 0; r < repeats; ++r)
+		{
+			TimePos repeatPos = startPos + (patternLen * r);
+			Clip* newClip = destTrack->createClip(repeatPos);
+			if (newClip)
+			{
+				Clip::copyStateTo(srcClip, newClip);
+				newClip->movePosition(repeatPos);
+				auto newAc = dynamic_cast<AutomationClip*>(newClip);
+				if (newAc && ac)
+				{
+					for (auto obj : ac->objects())
+					{
+						if (obj)
+						{
+							newAc->addObject(obj);
+						}
+					}
+				}
+				emit newClip->dataChanged();
+			}
+		}
+
+		++explodedTracksCount;
+	}
+
+	if (explodedTracksCount > 0)
+	{
+		m_patternClip->setMuted(true);
+		emit m_patternClip->dataChanged();
+		TextFloat::displayMessage(tr("Pattern Exploded"), tr("Pattern exploded into %1 Song Editor tracks.").arg(explodedTracksCount), embed::getIconPixmap("pattern_track"), 2500);
+	}
 }
 
 } // namespace lmms::gui
