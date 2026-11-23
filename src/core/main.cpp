@@ -381,20 +381,6 @@ int main( int argc, char * * argv )
 	QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
 #endif
 
-#ifdef LMMS_BUILD_WIN32
-	// Enable Direct3D 11 RHI for QWidget rendering on Windows to allow
-	// DXGI SwapChain presentation hooks (e.g. ReShade post-processing overlay)
-	// and smooth hardware-accelerated presentation.
-	if (!qEnvironmentVariableIsSet("QT_WIDGETS_RHI"))
-	{
-		qputenv("QT_WIDGETS_RHI", "1");
-	}
-	if (!qEnvironmentVariableIsSet("QSG_RHI_BACKEND"))
-	{
-		qputenv("QSG_RHI_BACKEND", "d3d11");
-	}
-#endif
-
 	QCoreApplication * app = coreOnly ?
 			new QCoreApplication( argc, argv ) :
 					new gui::MainApplication(argc, argv);

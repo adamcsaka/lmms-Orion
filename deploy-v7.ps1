@@ -62,33 +62,6 @@ if (-not (Test-Path "$dest\data\stk\rawwaves")) {
     }
 }
 
-# Ensure ReShade integration is preserved if available
-$vcmiReShade = "C:\Users\ahsoka\Documents\Alapértelmezett projekt\heroes3mód\vcmi\build\bin\Release"
-if (-not (Test-Path "$dest\dxgi.dll") -and (Test-Path "$vcmiReShade\dxgi.dll")) {
-    Write-Host "Integrating ReShade and shaders from VCMI directory..."
-    Copy-Item "$vcmiReShade\dxgi.dll" -Destination $dest -Force
-    Copy-Item "$vcmiReShade\ReShade64.dll" -Destination $dest -Force
-    if (Test-Path "$vcmiReShade\ReShade64.json") { Copy-Item "$vcmiReShade\ReShade64.json" -Destination $dest -Force }
-    Copy-Item "$vcmiReShade\ReShade.ini" -Destination $dest -Force
-    if (Test-Path "$vcmiReShade\ReShadePreset.ini") { Copy-Item "$vcmiReShade\ReShadePreset.ini" -Destination $dest -Force }
-    Get-ChildItem -Path $vcmiReShade -Filter "*.ini" | ForEach-Object { Copy-Item $_.FullName -Destination $dest -Force }
-    Copy-Item -Recurse "$vcmiReShade\reshade-shaders" -Destination $dest -Force
-    if (Test-Path "$dest\ReShade.ini") {
-        (Get-Content "$dest\ReShade.ini") | ForEach-Object {
-            $_ -replace 'IntermediateCachePath=.*', 'IntermediateCachePath=.\reshade-shaders'
-        } | Set-Content "$dest\ReShade.ini"
-    }
-}
-
-# Create a convenient ReShade launcher batch script
-$launcherContent = @"
-@echo off
-set QT_WIDGETS_RHI=1
-set QSG_RHI_BACKEND=d3d11
-start "" "%~dp0lmms.exe" %*
-"@
-Set-Content -Path "$dest\launch-reshade.bat" -Value $launcherContent -Encoding ASCII
-
 Write-Host "Running windeployqt..."
 & "C:\Qt\6.8.0\msvc2022_64\bin\windeployqt.exe" --no-translations --compiler-runtime "$dest\lmms.exe"
 
