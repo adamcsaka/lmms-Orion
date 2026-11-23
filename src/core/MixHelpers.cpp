@@ -98,6 +98,48 @@ bool isSilent(std::span<const sample_t> buffer)
 	return std::ranges::all_of(buffer, [&](const sample_t s) { return std::abs(s) < SilenceThreshold; });
 }
 
+#if defined(_M_X64) || defined(__x86_64__) || defined(_M_IX86) || defined(__i386__)
+#if defined(__GNUC__) || defined(__clang__)
+#define LMMS_AVX2_TARGET __attribute__((target("avx2")))
+#else
+#define LMMS_AVX2_TARGET
+#endif
+
+LMMS_AVX2_TARGET
+static inline void add_loop_avx2(float* d, const float* s, int& i, int totalFloats)
+{
+	for (; i + 8 <= totalFloats; i += 8)
+	{
+		__m256 vd = _mm256_loadu_ps(d + i);
+		__m256 vs = _mm256_loadu_ps(s + i);
+		_mm256_storeu_ps(d + i, _mm256_add_ps(vd, vs));
+	}
+}
+
+LMMS_AVX2_TARGET
+static inline void add_multiplied_loop_avx2(float* d, const float* s, float coeffSrc, int& i, int totalFloats)
+{
+	__m256 vc = _mm256_set1_ps(coeffSrc);
+	for (; i + 8 <= totalFloats; i += 8)
+	{
+		__m256 vd = _mm256_loadu_ps(d + i);
+		__m256 vs = _mm256_loadu_ps(s + i);
+		_mm256_storeu_ps(d + i, _mm256_add_ps(vd, _mm256_mul_ps(vs, vc)));
+	}
+}
+
+LMMS_AVX2_TARGET
+static inline void multiply_loop_avx2(float* d, float coeff, int& i, int totalFloats)
+{
+	__m256 vc = _mm256_set1_ps(coeff);
+	for (; i + 8 <= totalFloats; i += 8)
+	{
+		__m256 vd = _mm256_loadu_ps(d + i);
+		_mm256_storeu_ps(d + i, _mm256_mul_ps(vd, vc));
+	}
+}
+#endif
+
 struct AddOp
 {
 	void operator()( SampleFrame& dst, const SampleFrame& src ) const
@@ -116,12 +158,7 @@ void add( SampleFrame* dst, const SampleFrame* src, int frames )
 #if defined(_M_X64) || defined(__x86_64__) || defined(_M_IX86) || defined(__i386__)
 	if (s_cpu.hasAVX2)
 	{
-		for (; i + 8 <= totalFloats; i += 8)
-		{
-			__m256 vd = _mm256_loadu_ps(d + i);
-			__m256 vs = _mm256_loadu_ps(s + i);
-			_mm256_storeu_ps(d + i, _mm256_add_ps(vd, vs));
-		}
+		add_loop_avx2(d, s, i, totalFloats);
 	}
 	else
 	{
@@ -183,13 +220,7 @@ void addMultiplied( SampleFrame* dst, const SampleFrame* src, float coeffSrc, in
 #if defined(_M_X64) || defined(__x86_64__) || defined(_M_IX86) || defined(__i386__)
 	if (s_cpu.hasAVX2)
 	{
-		__m256 vc = _mm256_set1_ps(coeffSrc);
-		for (; i + 8 <= totalFloats; i += 8)
-		{
-			__m256 vd = _mm256_loadu_ps(d + i);
-			__m256 vs = _mm256_loadu_ps(s + i);
-			_mm256_storeu_ps(d + i, _mm256_add_ps(vd, _mm256_mul_ps(vs, vc)));
-		}
+		add_multiplied_loop_avx2(d, s, coeffSrc, i, totalFloats);
 	}
 	else
 	{
@@ -232,12 +263,7 @@ void multiply(SampleFrame* dst, float coeff, int frames)
 #if defined(_M_X64) || defined(__x86_64__) || defined(_M_IX86) || defined(__i386__)
 	if (s_cpu.hasAVX2)
 	{
-		__m256 vc = _mm256_set1_ps(coeff);
-		for (; i + 8 <= totalFloats; i += 8)
-		{
-			__m256 vd = _mm256_loadu_ps(d + i);
-			_mm256_storeu_ps(d + i, _mm256_mul_ps(vd, vc));
-		}
+		multiply_loop_avx2(d, coeff, i, totalFloats);
 	}
 	else
 	{

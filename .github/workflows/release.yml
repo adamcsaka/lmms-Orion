@@ -142,17 +142,22 @@ jobs:
       - name: Package AppImage
         run: |
           cmake --build build --target package || true
+          if ! ls build/*.AppImage 1> /dev/null 2>&1; then
+            cpack --config build/CPackConfig.cmake -G TGZ -B build || true
+          fi
 
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-release
-          path: build/lmms-*.AppImage
+          path: |
+            build/*.AppImage
+            build/*.tar.gz
 
   macos:
-    name: Build macOS Apple Silicon / Universal
+    name: Build macOS x86_64 DMG
     continue-on-error: true
-    runs-on: macos-14
+    runs-on: macos-13
     env:
       CMAKE_BUILD_PARALLEL_LEVEL: 4
       HOMEBREW_NO_AUTO_UPDATE: 1
@@ -166,12 +171,14 @@ jobs:
 
       - name: Install dependencies
         run: |
-          brew bundle install --verbose || true
+          brew install qt@6 ninja sdl2 libsamplerate libsndfile libvorbis libogg fltk fftw || true
           pipx install dmgbuild || true
+          echo "$(brew --prefix qt@6)/bin" >> $GITHUB_PATH
+          echo "CMAKE_PREFIX_PATH=$(brew --prefix qt@6)" >> $GITHUB_ENV
 
       - name: Configure CMake
         run: |
-          cmake -S . -B build \
+          cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DTARGET_UARCH=official \
             -DWANT_QT6=ON \
@@ -188,7 +195,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: macos-release
-          path: build/lmms-*.dmg
+          path: |
+            build/*.dmg
+            build/*.zip
 
   publish-release:
     name: Publish GitHub Release
