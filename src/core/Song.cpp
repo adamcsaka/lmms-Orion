@@ -27,6 +27,7 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QFile>
+#include <QFileInfo>
 #include <QMessageBox>
 
 #include <algorithm>
@@ -55,6 +56,7 @@
 #include "Scale.h"
 #include "SongEditor.h"
 #include "PeakController.h"
+#include "ThemeManager.h"
 
 
 namespace lmms
@@ -942,6 +944,11 @@ void Song::clearProject()
 
 	removeAllControllers();
 
+	if( getGUI() != nullptr )
+	{
+		gui::ThemeManager::inst()->resetToGlobalDefault();
+	}
+
 	emit dataChanged();
 
 	Engine::projectJournal()->clearJournal();
@@ -1140,6 +1147,7 @@ void Song::loadProject( const QString & fileName )
 		}
 	}
 
+	bool hasProjectTheme = false;
 	while( !node.isNull() && !isCancelled() )
 	{
 		if( node.isElement() )
@@ -1170,6 +1178,14 @@ void Song::loadProject( const QString & fileName )
 			{
 				restoreKeymapStates(node.toElement());
 			}
+			else if( node.nodeName() == "projecttheme" )
+			{
+				hasProjectTheme = true;
+				if( getGUI() != nullptr )
+				{
+					gui::ThemeManager::inst()->loadProjectTheme( node.toElement(), QFileInfo(fileName).absolutePath() );
+				}
+			}
 			else if( getGUI() != nullptr )
 			{
 				if( node.nodeName() == getGUI()->getControllerRackView()->nodeName() )
@@ -1195,6 +1211,11 @@ void Song::loadProject( const QString & fileName )
 			}
 		}
 		node = node.nextSibling();
+	}
+
+	if( !hasProjectTheme && getGUI() != nullptr )
+	{
+		gui::ThemeManager::inst()->resetToGlobalDefault();
 	}
 
 	// quirk for fixing projects with broken positions of Clips inside pattern tracks
@@ -1283,6 +1304,7 @@ bool Song::saveProjectFile(const QString & filename, bool withResources)
 		getGUI()->automationEditor()->m_editor->saveState( dataFile, dataFile.content() );
 		getGUI()->getProjectNotes()->SerializingObject::saveState( dataFile, dataFile.content() );
 		getTimeline(PlayMode::Song).saveState(dataFile, dataFile.content());
+		gui::ThemeManager::inst()->saveProjectTheme( dataFile, dataFile.content() );
 	}
 
 	saveControllerStates( dataFile, dataFile.content() );
