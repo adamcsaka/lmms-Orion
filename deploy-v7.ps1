@@ -33,6 +33,10 @@ if (Test-Path "C:\lmms\lmms-repo\build\vcpkg_installed\x64-windows\bin") {
 }
 Copy-Item -Recurse "C:\lmms\lmms-repo\build\plugins" -Destination $dest
 
+Write-Host "Pruning intermediate compiler artifacts (.pdb, .obj, .ilk, CMakeFiles) from plugins folder..."
+Get-ChildItem -Path "$dest\plugins" -Directory | Where-Object { $_.Name -notin @("ladspa", "32") } | Remove-Item -Recurse -Force
+Get-ChildItem -Path "$dest\plugins" -Recurse -File | Where-Object { $_.Extension -notin @(".dll", ".exe") } | Remove-Item -Force
+
 # Remove experimental and crash-prone plugins as requested
 Remove-Item -Force -ErrorAction SilentlyContinue "$dest\plugins\vital.dll", "$dest\plugins\oxosynth.dll", "$dest\plugins\carlabase.dll", "$dest\plugins\carlarack.dll", "$dest\plugins\carlapatchbay.dll"
 if (Test-Path "C:\lmms\lmms-repo\data") {
