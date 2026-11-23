@@ -1,4 +1,4 @@
-# LMMS Orion v7 Portable Deployment Script
+﻿# LMMS Orion v7 Portable Deployment Script
 param (
     [string]$TargetDir = "C:\Users\ahsoka\Downloads\LMMS-Orion-v7"
 )
@@ -59,6 +59,24 @@ if (-not (Test-Path "$dest\data\stk\rawwaves")) {
             New-Item -ItemType Directory -Path "$dest\data\stk" -Force | Out-Null
         }
         Copy-Item -Recurse "$portableDir\data\stk\rawwaves" -Destination "$dest\data\stk\"
+    }
+}
+
+# Ensure ReShade integration is preserved if available
+$vcmiReShade = "C:\Users\ahsoka\Documents\Alapértelmezett projekt\heroes3mód\vcmi\build\bin\Release"
+if (-not (Test-Path "$dest\dxgi.dll") -and (Test-Path "$vcmiReShade\dxgi.dll")) {
+    Write-Host "Integrating ReShade and shaders from VCMI directory..."
+    Copy-Item "$vcmiReShade\dxgi.dll" -Destination $dest -Force
+    Copy-Item "$vcmiReShade\ReShade64.dll" -Destination $dest -Force
+    if (Test-Path "$vcmiReShade\ReShade64.json") { Copy-Item "$vcmiReShade\ReShade64.json" -Destination $dest -Force }
+    Copy-Item "$vcmiReShade\ReShade.ini" -Destination $dest -Force
+    if (Test-Path "$vcmiReShade\ReShadePreset.ini") { Copy-Item "$vcmiReShade\ReShadePreset.ini" -Destination $dest -Force }
+    Get-ChildItem -Path $vcmiReShade -Filter "*.ini" | ForEach-Object { Copy-Item $_.FullName -Destination $dest -Force }
+    Copy-Item -Recurse "$vcmiReShade\reshade-shaders" -Destination $dest -Force
+    if (Test-Path "$dest\ReShade.ini") {
+        (Get-Content "$dest\ReShade.ini") | ForEach-Object {
+            $_ -replace 'IntermediateCachePath=.*', 'IntermediateCachePath=.\reshade-shaders'
+        } | Set-Content "$dest\ReShade.ini"
     }
 }
 

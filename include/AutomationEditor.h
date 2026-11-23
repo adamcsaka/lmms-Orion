@@ -42,6 +42,7 @@
 
 class QPushButton;
 class QScrollBar;
+class QDoubleSpinBox;
 
 namespace lmms
 {
@@ -374,6 +375,10 @@ public:
 
 public slots:
 	void clearCurrentClip();
+	void addSteps();
+	void removeSteps();
+	void duplicateContent();
+	void halveContent();
 
 signals:
 	void currentClipChanged();
@@ -414,6 +419,12 @@ private:
 	ComboBox * m_quantizeComboBox;
 
 	QPushButton* m_resetGhostNotes;
+
+	QDoubleSpinBox* m_stepsSpinBox;
+	QAction* m_addStepsAction;
+	QAction* m_removeStepsAction;
+	QAction* m_duplicateAction;
+	QAction* m_halveAction;
 };
 
 } // namespace gui

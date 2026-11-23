@@ -28,6 +28,7 @@
 #include "AutomationEditor.h"
 
 #include <QDoubleSpinBox>
+#include <QHBoxLayout>
 #include <QInputDialog>
 #include <QLabel>
 #include <QPainter>
