@@ -42,6 +42,7 @@ private slots:
 	void onPresetChanged(int index);
 	void onPickAccentColor();
 	void onPickBaseColor();
+	void onPickBorderColor();
 	void onPickWindowColor();
 	void onBrowseWallpaper();
 	void onClearWallpaper();
@@ -56,6 +57,7 @@ private:
 	QComboBox* m_presetCombo;
 	QPushButton* m_accentSwatchBtn;
 	QPushButton* m_baseSwatchBtn;
+	QPushButton* m_borderSwatchBtn;
 	QPushButton* m_windowSwatchBtn;
 	QLineEdit* m_wallpaperPathEdit;
 	QCheckBox* m_saveWithProjectCheck;

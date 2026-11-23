@@ -87,6 +87,7 @@ void ThemeManager::initFactoryPresets()
 		p.barLineColor = "#e5a93c";
 		p.noteColor = "#e5a93c";
 		p.selectedColor = "#996f24";
+		p.borderColor = "#e5a93c";
 		p.backgroundPic = "";
 		m_factoryPresets.append(p);
 	}
@@ -106,6 +107,7 @@ void ThemeManager::initFactoryPresets()
 		p.barLineColor = "#00e5ff";
 		p.noteColor = "#00e5ff";
 		p.selectedColor = "#0277bd";
+		p.borderColor = "#00e5ff";
 		p.backgroundPic = "";
 		m_factoryPresets.append(p);
 	}
@@ -125,6 +127,7 @@ void ThemeManager::initFactoryPresets()
 		p.barLineColor = "#10b981";
 		p.noteColor = "#10b981";
 		p.selectedColor = "#047857";
+		p.borderColor = "#10b981";
 		p.backgroundPic = "";
 		m_factoryPresets.append(p);
 	}
@@ -144,6 +147,7 @@ void ThemeManager::initFactoryPresets()
 		p.barLineColor = "#f59e0b";
 		p.noteColor = "#f59e0b";
 		p.selectedColor = "#b45309";
+		p.borderColor = "#f59e0b";
 		p.backgroundPic = "";
 		m_factoryPresets.append(p);
 	}
@@ -163,6 +167,7 @@ void ThemeManager::initFactoryPresets()
 		p.barLineColor = "#8173fe";
 		p.noteColor = "#0bd556";
 		p.selectedColor = "#064d79";
+		p.borderColor = "#5c6b7a";
 		p.backgroundPic = "";
 		m_factoryPresets.append(p);
 	}
@@ -238,6 +243,17 @@ void ThemeManager::setAccentColor(const QColor& color)
 	m_currentTheme.beatLineColor = color.darker(150).name();
 	m_currentTheme.selectedColor = color.darker(130).name();
 	m_currentTheme.textActive = (color.lightness() > 160) ? "#101010" : "#ffffff";
+	if (m_currentTheme.borderColor.isEmpty())
+	{
+		m_currentTheme.borderColor = color.name();
+	}
+	applyTheme(m_currentTheme, true);
+}
+
+void ThemeManager::setBorderColor(const QColor& color)
+{
+	if (!color.isValid()) return;
+	m_currentTheme.borderColor = color.name();
 	applyTheme(m_currentTheme, true);
 }
 
@@ -305,6 +321,7 @@ void ThemeManager::saveProjectTheme(QDomDocument& doc, QDomElement& parent)
 	elem.setAttribute("barLine", m_currentTheme.barLineColor);
 	elem.setAttribute("note", m_currentTheme.noteColor);
 	elem.setAttribute("selected", m_currentTheme.selectedColor);
+	elem.setAttribute("border", m_currentTheme.borderColor.isEmpty() ? m_currentTheme.accentColor : m_currentTheme.borderColor);
 
 	// Store background image as relative path if located inside project directory
 	QString bg = m_currentTheme.backgroundPic;
@@ -348,6 +365,7 @@ void ThemeManager::loadProjectTheme(const QDomElement& elem, const QString& proj
 	p.barLineColor = elem.attribute("barLine", "#e5a93c");
 	p.noteColor = elem.attribute("note", "#e5a93c");
 	p.selectedColor = elem.attribute("selected", "#996f24");
+	p.borderColor = elem.attribute("border", p.accentColor);
 
 	QString bg = elem.attribute("bg", "");
 	if (!bg.isEmpty())
@@ -398,6 +416,7 @@ bool ThemeManager::savePresetToFile(const QString& filePath, const ThemePreset& 
 	root["barLineColor"] = p.barLineColor;
 	root["noteColor"] = p.noteColor;
 	root["selectedColor"] = p.selectedColor;
+	root["borderColor"] = p.borderColor.isEmpty() ? p.accentColor : p.borderColor;
 	root["backgroundPic"] = p.backgroundPic;
 
 	QJsonDocument doc(root);
@@ -438,6 +457,8 @@ bool ThemeManager::loadPresetFromFile(const QString& filePath, ThemePreset& p)
 	p.barLineColor = root["barLineColor"].toString();
 	p.noteColor = root["noteColor"].toString();
 	p.selectedColor = root["selectedColor"].toString();
+	p.borderColor = root["borderColor"].toString();
+	if (p.borderColor.isEmpty()) p.borderColor = p.accentColor;
 	p.backgroundPic = root["backgroundPic"].toString();
 	return true;
 }
@@ -447,6 +468,27 @@ QString ThemeManager::generateThemeQss(const ThemePreset& p) const
 	QString qss;
 	QTextStream ts(&qss);
 
+	QColor base(p.baseColor);
+	QColor accent(p.accentColor);
+	QColor win(p.windowColor);
+	QColor border = p.borderColor.isEmpty() ? accent : QColor(p.borderColor);
+
+	// Titlebar gradients:
+	// Active subwindow titlebar: tinted by accent / border color
+	QColor activeTitleStart = accent.darker(175);
+	QColor activeTitleEnd = accent.darker(240);
+
+	// Inactive subwindow titlebar: harmonious base tone
+	QColor inactiveTitleStart = base.lighter(130);
+	QColor inactiveTitleEnd = base.darker(110);
+
+	// Menu, Docks, Buttons
+	QColor menuBg = base.darker(115);
+	QColor dockTitleBg = base.lighter(115);
+	QColor trackBtnBg = base.lighter(115);
+	QColor trackBtnBorder = base.lighter(135);
+	QColor mixerBg = base.darker(110);
+
 	ts << "\n/* --- DYNAMIC THEME: " << p.name << " --- */\n";
 
 	// QMdiArea (Workspace background)
@@ -454,9 +496,51 @@ QString ThemeManager::generateThemeQss(const ThemePreset& p) const
 	   << "    background-color: " << p.windowColor << ";\n"
 	   << "}\n";
 
-	// Main Toolbar
-	ts << "QWidget#mainToolbar {\n"
+	// Subwindows and Window Frames
+	ts << "\n/* Subwindows and Window Frames */\n"
+	   << "lmms--gui--SubWindow {\n"
+	   << "    color: qlineargradient(spread:pad, x1:0, y1:0, x2:0, y2:1, stop:0 " << inactiveTitleStart.name() << ", stop:1 " << inactiveTitleEnd.name() << ");\n"
+	   << "    qproperty-activeColor: qlineargradient(spread:pad, x1:0, y1:0, x2:0, y2:1, stop:0 " << activeTitleStart.name() << ", stop:1 " << activeTitleEnd.name() << ");\n"
+	   << "    qproperty-borderColor: " << border.name() << ";\n"
+	   << "}\n"
+	   << "lmms--gui--SubWindow > QLabel {\n"
+	   << "    color: " << p.textColor << ";\n"
+	   << "    font-weight: bold;\n"
+	   << "}\n";
+
+	// Main Panels, Toolbars, SideBars, Menus, Status Bar, Docks
+	ts << "\n/* Panels, Toolbars, Sidebars, Menus, Docks */\n"
+	   << "QWidget#mainToolbar, QToolBar, lmms--gui--SideBar {\n"
 	   << "    background-color: " << p.baseColor << ";\n"
+	   << "    border: none;\n"
+	   << "}\n"
+	   << "QMenuBar {\n"
+	   << "    background-color: " << p.baseColor << ";\n"
+	   << "    color: " << p.textColor << ";\n"
+	   << "}\n"
+	   << "QMenu {\n"
+	   << "    background-color: " << menuBg.name() << ";\n"
+	   << "    color: " << p.textColor << ";\n"
+	   << "    border: 1px solid " << border.name() << ";\n"
+	   << "}\n"
+	   << "QStatusBar {\n"
+	   << "    background-color: " << p.baseColor << ";\n"
+	   << "    color: " << p.textColor << ";\n"
+	   << "}\n"
+	   << "QDockWidget {\n"
+	   << "    background-color: " << p.baseColor << ";\n"
+	   << "    color: " << p.textColor << ";\n"
+	   << "}\n"
+	   << "QDockWidget::title {\n"
+	   << "    background-color: " << dockTitleBg.name() << ";\n"
+	   << "    color: " << p.textColor << ";\n"
+	   << "}\n"
+	   << "lmms--gui--TrackLabelButton {\n"
+	   << "    background-color: " << trackBtnBg.name() << ";\n"
+	   << "    border: 1px solid " << trackBtnBorder.name() << ";\n"
+	   << "}\n"
+	   << "lmms--gui--MixerChannelView {\n"
+	   << "    background-color: " << mixerBg.name() << ";\n"
 	   << "}\n";
 
 	// Checked buttons and active toggle states

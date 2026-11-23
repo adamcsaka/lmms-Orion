@@ -22,7 +22,7 @@ jobs:
       - name: Configure git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Check out
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: recursive
@@ -30,7 +30,7 @@ jobs:
         run: |
           echo "CMAKE_BUILD_PARALLEL_LEVEL=$(nproc)" | tee -a "$GITHUB_ENV"
       - name: Clone fltk
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
           repository: fltk/fltk
           path: fltk
@@ -116,7 +116,7 @@ jobs:
       - name: Configure git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Check out
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: recursive
@@ -124,7 +124,7 @@ jobs:
         run: |
           echo "CMAKE_BUILD_PARALLEL_LEVEL=$(nproc)" | tee -a "$GITHUB_ENV"
       - name: Clone fltk
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
           repository: fltk/fltk
           path: fltk
@@ -212,7 +212,7 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_${{ matrix.xcode }}.app/Contents/Developer
     steps:
       - name: Check out
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: recursive
@@ -305,7 +305,7 @@ jobs:
       - name: Configure git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Check out
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: recursive
@@ -473,7 +473,7 @@ jobs:
       CMAKE_BUILD_PARALLEL_LEVEL: 4
     steps:
       - name: Check out
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: recursive
