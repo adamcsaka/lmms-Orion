@@ -99,7 +99,11 @@ AutomationEditor::AutomationEditor() :
 	m_crossColor(0, 0, 0),
 	m_backgroundShade(0, 0, 0),
 	m_ghostNoteColor(0, 0, 0),
-	m_outOfBoundsShade(0, 0, 0, 128)
+	m_outOfBoundsShade(0, 0, 0, 128),
+	m_positionLine(nullptr),
+	m_rubberBandActive(false),
+	m_moveStartPosTicks(0),
+	m_moveStartLevel(0.0f)
 {
 	connect( this, SIGNAL(currentClipChanged()),
 				this, SLOT(updateAfterClipChange()),
@@ -131,6 +135,11 @@ AutomationEditor::AutomationEditor() :
 		m_currentPosition, this
 	);
 	connect(m_timeLine->timeline(), &Timeline::positionChanged, this, &AutomationEditor::updatePosition);
+
+	m_positionLine = new PositionLine(this, Song::PlayMode::AutomationClip);
+	connect(Engine::getSong(), &Song::playbackStateChanged, m_positionLine, qOverload<>(&QWidget::update));
+	connect(&Engine::getSong()->getTimeline(Song::PlayMode::Song), &Timeline::positionChanged, this, &AutomationEditor::updatePositionAccompany);
+	connect(&Engine::getSong()->getTimeline(Song::PlayMode::Pattern), &Timeline::positionChanged, this, &AutomationEditor::updatePositionAccompany);
 
 	// init scrollbars
 	m_leftRightScroll = new QScrollBar( Qt::Horizontal, this );
@@ -229,6 +238,10 @@ void AutomationEditor::updateAfterClipChange()
 	// of levels and so on...)
 	resizeEvent(nullptr);
 
+	m_selectedTicks.clear();
+	updatePositionLineHeight();
+	updatePositionLinePos();
+
 	update();
 }
 
@@ -251,6 +264,58 @@ void AutomationEditor::update()
 
 void AutomationEditor::keyPressEvent(QKeyEvent * ke )
 {
+	if (ke->matches(QKeySequence::SelectAll) || (ke->key() == Qt::Key_A && (ke->modifiers() & Qt::ControlModifier)))
+	{
+		selectAllNodes();
+		ke->accept();
+		return;
+	}
+	if (ke->key() == Qt::Key_Delete || ke->key() == Qt::Key_Backspace)
+	{
+		if (!m_selectedTicks.empty())
+		{
+			deleteSelectedNodes();
+			ke->accept();
+			return;
+		}
+	}
+	if (ke->key() == Qt::Key_Escape)
+	{
+		clearNodeSelection();
+		ke->accept();
+		return;
+	}
+
+	if (!m_selectedTicks.empty())
+	{
+		int quant = AutomationClip::quantizationTicks();
+		if (quant <= 0) { quant = 16; }
+		if (ke->key() == Qt::Key_Left)
+		{
+			moveSelectedNodes(-quant, 0.f);
+			ke->accept();
+			return;
+		}
+		if (ke->key() == Qt::Key_Right)
+		{
+			moveSelectedNodes(quant, 0.f);
+			ke->accept();
+			return;
+		}
+		if (ke->key() == Qt::Key_Up)
+		{
+			moveSelectedNodes(0, m_step);
+			ke->accept();
+			return;
+		}
+		if (ke->key() == Qt::Key_Down)
+		{
+			moveSelectedNodes(0, -m_step);
+			ke->accept();
+			return;
+		}
+	}
+
 	switch( ke->key() )
 	{
 		case Qt::Key_Up:
@@ -1066,31 +1131,29 @@ void AutomationEditor::paintEvent(QPaintEvent * pe )
 
 	if (m_y_auto)
 	{
-		auto y = std::array{grid_bottom, TOP_MARGIN + font_height / 2};
-		auto level = std::array{m_minLevel, m_maxLevel};
-		for (int i = 0; i < 2; ++i)
+		const int steps = 4;
+		for (int i = 0; i <= steps; ++i)
 		{
-			const QString& label = m_clip->firstObject()->displayValue(level[i]);
+			float level = m_minLevel + (m_maxLevel - m_minLevel) * (static_cast<float>(i) / steps);
+			int y = static_cast<int>(yCoordOfLevel(level));
+			if (i == steps) { y = TOP_MARGIN + font_height / 2; }
+			else if (i == 0) { y = grid_bottom; }
+			const QString& label = m_clip->firstObject()->displayValue(level);
 			p.setPen(QApplication::palette().color(QPalette::Active, QPalette::Shadow));
-			p.drawText(1, y[i] - font_height + 1, VALUES_WIDTH - 10, 2 * font_height, text_flags, label);
+			p.drawText(1, y - font_height + 1, VALUES_WIDTH - 10, 2 * font_height, text_flags, label);
 			p.setPen(fgColor);
-			p.drawText(0, y[i] - font_height, VALUES_WIDTH - 10, 2 * font_height, text_flags, label);
+			p.drawText(0, y - font_height, VALUES_WIDTH - 10, 2 * font_height, text_flags, label);
 		}
 	}
 	else
 	{
-		int level = (int)m_bottomLevel;
-		auto printable = static_cast<int>(std::max(1.0f, 5 * DEFAULT_Y_DELTA / m_y_delta));
-		int module = level % printable;
-		if (module)
-		{
-			int inv_module = (printable - module) % printable;
-			level += inv_module;
-		}
-		for (; level <= m_topLevel; level += printable)
+		float level = m_bottomLevel;
+		float range = m_maxLevel - m_minLevel;
+		float printable = (range <= 5.0f) ? 0.25f : static_cast<float>(static_cast<int>(std::max(1.0f, 5 * DEFAULT_Y_DELTA / m_y_delta)));
+		for (; level <= m_topLevel + 0.001f; level += printable)
 		{
 			const QString& label = m_clip->firstObject()->displayValue(level);
-			int y = yCoordOfLevel(level);
+			int y = static_cast<int>(yCoordOfLevel(level));
 			p.setPen(QApplication::palette().color(QPalette::Active, QPalette::Shadow));
 			p.drawText(1, y - font_height + 1, VALUES_WIDTH - 10, 2 * font_height, text_flags, label);
 			p.setPen(fgColor);
@@ -1631,7 +1694,7 @@ float AutomationEditor::getLevel(int y )
 					/ (float)( level_line_y - ( TOP_MARGIN + 2 ) ) :
 			( level_line_y - y ) / (float)m_y_delta ) ) / m_step ) * m_step;
 	// some range-checking-stuff
-	level = qBound(std::roundf(m_bottomLevel), level, std::roundf(m_topLevel));
+	level = std::clamp(level, m_bottomLevel, m_topLevel);
 
 	return level;
 }
@@ -1874,31 +1937,27 @@ void AutomationEditor::updateTopBottomLevels()
 		return;
 	}
 
-	int total_pixels = (int)( ( m_maxLevel - m_minLevel ) * m_y_delta + 1 );
-	int grid_height = height() - TOP_MARGIN - SCROLLBAR_SIZE;
-	int half_grid = grid_height / 2;
+	float total_pixels = ( m_maxLevel - m_minLevel ) * m_y_delta + 1.f;
+	float grid_height = height() - TOP_MARGIN - SCROLLBAR_SIZE;
+	float half_grid = grid_height / 2.f;
 
 	if( total_pixels > grid_height )
 	{
-		int centralLevel = (int)( m_minLevel + m_maxLevel - m_scrollLevel );
+		float centralLevel = m_minLevel + m_maxLevel - m_scrollLevel;
 
-		m_bottomLevel = centralLevel - ( half_grid
-							/ m_y_delta );
+		m_bottomLevel = centralLevel - ( half_grid / m_y_delta );
 		if( m_bottomLevel < m_minLevel )
 		{
 			m_bottomLevel = m_minLevel;
-			m_topLevel = m_minLevel + (int)floorf( grid_height
-							/ m_y_delta );
+			m_topLevel = std::min(m_maxLevel, m_minLevel + ( grid_height / m_y_delta ));
 		}
 		else
 		{
-			m_topLevel = m_bottomLevel + (int)floorf( grid_height
-							/ m_y_delta );
+			m_topLevel = m_bottomLevel + ( grid_height / m_y_delta );
 			if( m_topLevel > m_maxLevel )
 			{
 				m_topLevel = m_maxLevel;
-				m_bottomLevel = m_maxLevel - (int)floorf(
-					grid_height / m_y_delta );
+				m_bottomLevel = std::max(m_minLevel, m_maxLevel - ( grid_height / m_y_delta ));
 			}
 		}
 	}

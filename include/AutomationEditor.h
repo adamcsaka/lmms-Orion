@@ -38,6 +38,7 @@
 #include "TimePos.h"
 #include "LmmsTypes.h"
 #include "SampleThumbnail.h"
+#include "PositionLine.h"
 
 class QPushButton;
 class QScrollBar;
@@ -97,8 +98,16 @@ public:
 		Draw,
 		Erase,
 		DrawOutValues,
-		EditTangents
+		EditTangents,
+		Select
 	};
+
+	bool isNodeSelected(int tick) const;
+	void selectAllNodes();
+	void clearNodeSelection();
+	void deleteSelectedNodes();
+	void moveSelectedNodes(int deltaTicks, float deltaLevel);
+	void computeSelectedNodes(bool shift);
 
 public slots:
 	void update();
@@ -164,6 +173,9 @@ protected slots:
 	void setTension();
 
 	void updatePosition();
+	void updatePositionLinePos();
+	void updatePositionLineHeight();
+	void updatePositionAccompany();
 
 	void zoomingXChanged();
 	void zoomingYChanged();
@@ -191,7 +203,9 @@ private:
 		ResetOutValues,
 		DrawLine,
 		MoveTangent,
-		ResetTangents
+		ResetTangents,
+		SelectBox,
+		MoveSelection
 	} ;
 
 	// some constants...
@@ -303,6 +317,25 @@ private:
 	
 	SampleThumbnail m_sampleThumbnail;
 
+	PositionLine * m_positionLine;
+
+	std::vector<int> m_selectedTicks;
+	QRect m_rubberBandRect;
+	QPoint m_rubberBandStart;
+	bool m_rubberBandActive;
+
+	int m_moveStartPosTicks;
+	float m_moveStartLevel;
+	struct NodeInitialState
+	{
+		float inVal;
+		float outVal;
+		float inTan;
+		float outTan;
+		bool lockedTan;
+	};
+	std::map<int, NodeInitialState> m_initialSelectionNodes;
+
 	friend class AutomationEditorWindow;
 
 
@@ -364,6 +397,7 @@ private:
 	QAction* m_eraseAction;
 	QAction* m_drawOutAction;
 	QAction* m_editTanAction;
+	QAction* m_selectAction;
 
 	QAction* m_discreteAction;
 	QAction* m_linearAction;

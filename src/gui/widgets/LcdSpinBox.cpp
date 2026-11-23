@@ -26,6 +26,8 @@
 #include <cmath>
 #include <QMouseEvent>
 #include <QInputDialog>
+#include <QGuiApplication>
+#include <QScreen>
 
 #include "LcdSpinBox.h"
 #include "KeyboardShortcuts.h"
@@ -124,6 +126,26 @@ void LcdSpinBox::mouseMoveEvent( QMouseEvent* event )
 			model()->setValue( floatValRounded );
 			emit manualChange();
 			m_lastMousePos = globalPos;
+		}
+
+		// Infinite drag screen-wrapping: wrap across monitor top/bottom edges
+		QScreen* screen = QGuiApplication::screenAt(globalPos);
+		if (!screen) { screen = QGuiApplication::primaryScreen(); }
+		if (screen)
+		{
+			const QRect geom = screen->geometry();
+			if (globalPos.y() <= geom.top() + 4)
+			{
+				const QPoint newPos(globalPos.x(), geom.bottom() - 10);
+				QCursor::setPos(newPos);
+				m_lastMousePos = newPos;
+			}
+			else if (globalPos.y() >= geom.bottom() - 4)
+			{
+				const QPoint newPos(globalPos.x(), geom.top() + 10);
+				QCursor::setPos(newPos);
+				m_lastMousePos = newPos;
+			}
 		}
 	}
 }

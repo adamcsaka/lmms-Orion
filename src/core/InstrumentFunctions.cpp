@@ -227,6 +227,11 @@ InstrumentFunctionNoteStacking::InstrumentFunctionNoteStacking( Model * _parent 
 
 void InstrumentFunctionNoteStacking::processNote( NotePlayHandle * _n )
 {
+	if (!_n || !_n->instrumentTrack())
+	{
+		return;
+	}
+
 	const int base_note_key = _n->key();
 	const ChordTable & chord_table = ChordTable::getInstance();
 	// we add chord-subnotes to note if either note is a base-note and
@@ -240,6 +245,10 @@ void InstrumentFunctionNoteStacking::processNote( NotePlayHandle * _n )
 	{
 		// then insert sub-notes for chord
 		const int selected_chord = m_chordsModel.value();
+		if (selected_chord < 0 || selected_chord >= static_cast<int>(chord_table.chords().size()))
+		{
+			return;
+		}
 
 		for( int octave_cnt = 0; octave_cnt < m_chordRangeModel.value(); ++octave_cnt )
 		{
