@@ -34,6 +34,7 @@
 #include "InstrumentTrack.h"
 #include "MixHelpers.h"
 #include "PatternStore.h"
+#include "panning.h"
 #include "SampleTrack.h"
 #include "TrackContainer.h" // For TrackContainer::TrackList typedef
 
@@ -68,6 +69,7 @@ MixerChannel::MixerChannel( int idx, Model * _parent ) :
 	m_muteModel( false, _parent ),
 	m_soloModel( false, _parent ),
 	m_volumeModel(1.f, 0.f, 2.f, 0.001f, _parent),
+	m_panModel(DefaultPanning, PanningLeft, PanningRight, 0.1f, _parent),
 	m_name(),
 	m_lock(),
 	m_queued( false ),
@@ -75,6 +77,7 @@ MixerChannel::MixerChannel( int idx, Model * _parent ) :
 	m_channelIndex(idx)
 {
 	m_buffer.allocateInterleavedBuffer();
+	m_panModel.setCenterValue( DefaultPanning );
 }
 
 
@@ -213,6 +216,42 @@ void MixerChannel::doProcessing()
 		const float v = m_volumeModel.value();
 
 		m_stillRunning = m_fxChain.processAudioBuffer(m_buffer);
+
+		// apply channel panning to the processed output (post-fader)
+		{
+			ValueBuffer * panBuf = m_panModel.valueBuffer();
+			if( panBuf )
+			{
+				auto chans = m_buffer.groupBuffers( 0 );
+				const f_cnt_t frames = m_buffer.frames();
+				for( f_cnt_t f = 0; f < frames; ++f )
+				{
+					const float p = panBuf->values()[f] * 0.01f;
+					const float gl = p <= 0.0f ? 1.0f : 1.0f - p;
+					const float gr = p >= 0.0f ? 1.0f : 1.0f + p;
+					if( chans.channels() > 0 ) { chans.buffer( 0 )[f] *= gl; }
+					if( chans.channels() > 1 ) { chans.buffer( 1 )[f] *= gr; }
+				}
+				toInterleaved( m_buffer.groupBuffers( 0 ), m_buffer.interleavedBuffer() );
+			}
+			else
+			{
+				const float p = m_panModel.value() * 0.01f;
+				if( p != 0.0f )
+				{
+					const float gl = p <= 0.0f ? 1.0f : 1.0f - p;
+					const float gr = p >= 0.0f ? 1.0f : 1.0f + p;
+					auto chans = m_buffer.groupBuffers( 0 );
+					const f_cnt_t frames = m_buffer.frames();
+					for( f_cnt_t f = 0; f < frames; ++f )
+					{
+						if( chans.channels() > 0 ) { chans.buffer( 0 )[f] *= gl; }
+						if( chans.channels() > 1 ) { chans.buffer( 1 )[f] *= gr; }
+					}
+					toInterleaved( m_buffer.groupBuffers( 0 ), m_buffer.interleavedBuffer() );
+				}
+			}
+		}
 
 		const auto peakSamples = SampleFrame{m_buffer.absPeakValue(0), m_buffer.absPeakValue(1)};
 		m_peakLeft = std::max(m_peakLeft, peakSamples[0] * v);
@@ -761,10 +800,12 @@ void Mixer::clearChannel(mix_ch_t index)
 	MixerChannel * ch = m_mixerChannels[index];
 	ch->m_fxChain.clear();
 	ch->m_volumeModel.setValue( 1.0f );
+	ch->m_panModel.setValue( DefaultPanning );
 	ch->m_muteModel.setValue( false );
 	ch->m_soloModel.setValue( false );
 	ch->m_name = ( index == 0 ) ? tr( "Master" ) : tr( "Channel %1" ).arg( index );
 	ch->m_volumeModel.setDisplayName( ch->m_name + ">" + tr( "Volume" ) );
+	ch->m_panModel.setDisplayName( ch->m_name + ">" + tr( "Pan" ) );
 	ch->m_muteModel.setDisplayName( ch->m_name + ">" + tr( "Mute" ) );
 	ch->m_soloModel.setDisplayName( ch->m_name + ">" + tr( "Solo" ) );
 	ch->setColor(std::nullopt);
@@ -801,6 +842,7 @@ void Mixer::saveSettings( QDomDocument & _doc, QDomElement & _this )
 
 		ch->m_fxChain.saveState( _doc, mixch );
 		ch->m_volumeModel.saveSettings( _doc, mixch, "volume" );
+		ch->m_panModel.saveSettings( _doc, mixch, "pan" );
 		ch->m_muteModel.saveSettings( _doc, mixch, "muted" );
 		ch->m_soloModel.saveSettings( _doc, mixch, "soloed" );
 		mixch.setAttribute("num", static_cast<qulonglong>(i));
@@ -849,6 +891,7 @@ void Mixer::loadSettings( const QDomElement & _this )
 		allocateChannelsTo( num );
 
 		m_mixerChannels[num]->m_volumeModel.loadSettings( mixch, "volume" );
+		m_mixerChannels[num]->m_panModel.loadSettings( mixch, "pan" );
 		m_mixerChannels[num]->m_muteModel.loadSettings( mixch, "muted" );
 		m_mixerChannels[num]->m_soloModel.loadSettings( mixch, "soloed" );
 		m_mixerChannels[num]->m_name = mixch.attribute( "name" );

@@ -34,6 +34,7 @@
 #include <QMessageBox>
 #include <QPainter>
 #include <QStackedWidget>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <QDomDocument>
 
@@ -41,6 +42,7 @@
 #include "CaptionMenu.h"
 #include "ColorChooser.h"
 #include "ConfigManager.h"
+#include "Effect.h"
 #include "EffectRackView.h"
 #include "Fader.h"
 #include "FontHelper.h"
@@ -130,13 +132,24 @@ MixerChannelView::MixerChannelView(QWidget* parent, MixerView* mixerView, int ch
 	m_soloButton->setCheckable(true);
 	m_soloButton->setModel(&mixerChannel->m_soloModel);
 
+	m_eqButton = new QToolButton(this);
+	m_eqButton->setText(QStringLiteral("EQ"));
+	m_eqButton->setToolTip(tr("Insert or open the parametric equalizer for this channel"));
+	m_eqButton->setAutoRaise(true);
+	m_eqButton->setFocusPolicy(Qt::NoFocus);
+	connect(m_eqButton, &QToolButton::clicked, this, &MixerChannelView::toggleChannelEq);
+
 	auto soloMuteLayout = new QVBoxLayout();
 	soloMuteLayout->setContentsMargins(0, 2, 0, 2);
 	soloMuteLayout->setSpacing(2);
 	soloMuteLayout->addWidget(m_soloButton, 0, Qt::AlignHCenter);
 	soloMuteLayout->addWidget(m_muteButton, 0, Qt::AlignHCenter);
+	soloMuteLayout->addWidget(m_eqButton, 0, Qt::AlignHCenter);
 
 	m_fader = new Fader{&mixerChannel->m_volumeModel, tr("Fader %1").arg(channelIndex), this};
+
+	m_panKnob = new Knob{KnobType::Small17, this, tr("Pan")};
+	m_panKnob->setModel(&mixerChannel->m_panModel);
 
 	m_peakIndicator = new PeakIndicator(this);
 	connect(m_fader, &Fader::peakChanged, m_peakIndicator, &PeakIndicator::updatePeak);
@@ -155,7 +168,12 @@ MixerChannelView::MixerChannelView(QWidget* parent, MixerView* mixerView, int ch
 	mainLayout->addWidget(m_renameLineEditView, 0, Qt::AlignHCenter);
 	mainLayout->addLayout(soloMuteLayout);
 	mainLayout->addWidget(m_peakIndicator);
-	mainLayout->addWidget(m_fader, 1, Qt::AlignHCenter);
+	auto faderRow = new QHBoxLayout();
+	faderRow->setContentsMargins(0, 0, 0, 0);
+	faderRow->setSpacing(0);
+	faderRow->addWidget(m_fader, 1, Qt::AlignHCenter);
+	faderRow->addWidget(m_panKnob, 0, Qt::AlignVCenter);
+	mainLayout->addLayout(faderRow, 1);
 
 	connect(m_renameLineEdit, &QLineEdit::editingFinished, this, &MixerChannelView::renameFinished);
 
@@ -173,6 +191,7 @@ void MixerChannelView::contextMenuEvent(QContextMenuEvent*)
 	}
 
 	contextMenu->addAction(tr("Rename &channel"), this, &MixerChannelView::renameChannel);
+	contextMenu->addAction(tr("&Parametric EQ..."), this, &MixerChannelView::toggleChannelEq);
 	if (!isMasterChannel())
 	{
 		contextMenu->addAction(embed::getIconPixmap("clone"), tr("&Duplicate channel"), this, &MixerChannelView::duplicateChannel);
@@ -309,6 +328,7 @@ void MixerChannelView::duplicateChannel()
 
 	destChan->m_name = srcChan->m_name + " " + tr("(Copy)");
 	destChan->m_volumeModel.setValue(srcChan->m_volumeModel.value());
+	destChan->m_panModel.setValue(srcChan->m_panModel.value());
 	destChan->m_muteModel.setValue(srcChan->m_muteModel.value());
 	destChan->setColor(srcChan->color());
 
@@ -344,6 +364,21 @@ void MixerChannelView::selectColor()
 
 	Engine::getSong()->setModified();
 	update();
+}
+
+void MixerChannelView::toggleChannelEq()
+{
+	auto* rack = m_effectRackView;
+	if (rack == nullptr) { return; }
+
+	Effect* existing = rack->findEffectByPluginName(QStringLiteral("eq"));
+	if (existing != nullptr)
+	{
+		rack->editEffectControls(existing);
+		return;
+	}
+
+	rack->addEffectByName(QStringLiteral("eq"));
 }
 
 void MixerChannelView::randomizeColor()

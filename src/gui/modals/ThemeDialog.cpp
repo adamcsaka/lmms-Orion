@@ -26,6 +26,7 @@
 #include <QGridLayout>
 #include <QFormLayout>
 #include <QGroupBox>
+#include <QScrollArea>
 #include <QFileDialog>
 #include <QInputDialog>
 #include <QMessageBox>
@@ -91,6 +92,33 @@ ThemeDialog::ThemeDialog(QWidget* parent) :
 	m_windowSwatchBtn->setCursor(Qt::PointingHandCursor);
 	connect(m_windowSwatchBtn, &QPushButton::clicked, this, &ThemeDialog::onPickWindowColor);
 	colorLayout->addWidget(m_windowSwatchBtn, 3, 1);
+
+	// Extended precise color customization (scrollable area)
+	auto keyedContainer = new QWidget(colorGroup);
+	m_keyedColorLayout = new QGridLayout(keyedContainer);
+	m_keyedColorLayout->setContentsMargins(0, 0, 0, 0);
+	m_keyedColorLayout->setColumnStretch(1, 1);
+	m_keyedColorRow = 0;
+
+	addColorRow(tr("Accent Hover Color:"), QStringLiteral("accentHover"));
+	addColorRow(tr("Text on Accent:"), QStringLiteral("textActive"));
+	addColorRow(tr("General Text Color:"), QStringLiteral("textColor"));
+	addColorRow(tr("Grid Lines Color:"), QStringLiteral("grid"));
+	addColorRow(tr("Beat Lines Color:"), QStringLiteral("beatLine"));
+	addColorRow(tr("Bar Lines Color:"), QStringLiteral("barLine"));
+	addColorRow(tr("Note Color:"), QStringLiteral("note"));
+	addColorRow(tr("Selection Color:"), QStringLiteral("selected"));
+	addColorRow(tr("Input Fields Color:"), QStringLiteral("field"));
+	addColorRow(tr("Sliders & Scrollbars Color:"), QStringLiteral("slider"));
+	addColorRow(tr("Headers & Group Boxes Color:"), QStringLiteral("header"));
+
+	auto keyedScroll = new QScrollArea(colorGroup);
+	keyedScroll->setWidget(keyedContainer);
+	keyedScroll->setWidgetResizable(true);
+	keyedScroll->setFrameShape(QFrame::NoFrame);
+	keyedScroll->setFixedHeight(190);
+	keyedScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	colorLayout->addWidget(keyedScroll, 4, 0, 1, 2);
 
 	mainLayout->addWidget(colorGroup);
 
@@ -199,25 +227,48 @@ void ThemeDialog::populatePresets()
 	m_presetCombo->blockSignals(false);
 }
 
+void ThemeDialog::addColorRow(const QString& label, const QString& key)
+{
+	if (m_keyedColorLayout == nullptr) { return; }
+
+	auto* rowLabel = new QLabel(label, m_keyedColorLayout->parentWidget());
+	auto* btn = new QPushButton(m_keyedColorLayout->parentWidget());
+	btn->setMinimumHeight(26);
+	btn->setCursor(Qt::PointingHandCursor);
+	btn->setProperty("colorKey", key);
+	connect(btn, &QPushButton::clicked, this, &ThemeDialog::onPickKeyedColor);
+
+	const int row = m_keyedColorRow++;
+	m_keyedColorLayout->addWidget(rowLabel, row, 0);
+	m_keyedColorLayout->addWidget(btn, row, 1);
+	m_keyedSwatchBtns.append({key, btn});
+}
+
+void ThemeDialog::formatSwatch(QPushButton* btn, const QString& hex)
+{
+	QColor col(hex);
+	QString textColor = (col.lightness() > 160) ? "#111111" : "#ffffff";
+	btn->setText(hex.toUpper());
+	btn->setStyleSheet(QString(
+		"QPushButton { background-color: %1; color: %2; font-weight: bold; border-radius: 4px; border: 1px solid #555; }"
+		"QPushButton:hover { border: 2px solid #fff; }"
+	).arg(hex, textColor));
+}
+
 void ThemeDialog::updateSwatches()
 {
 	const auto& theme = ThemeManager::inst()->currentTheme();
-
-	auto formatSwatch = [](QPushButton* btn, const QString& hex)
-	{
-		QColor col(hex);
-		QString textColor = (col.lightness() > 160) ? "#111111" : "#ffffff";
-		btn->setText(hex.toUpper());
-		btn->setStyleSheet(QString(
-			"QPushButton { background-color: %1; color: %2; font-weight: bold; border-radius: 4px; border: 1px solid #555; }"
-			"QPushButton:hover { border: 2px solid #fff; }"
-		).arg(hex, textColor));
-	};
 
 	formatSwatch(m_accentSwatchBtn, theme.accentColor);
 	formatSwatch(m_baseSwatchBtn, theme.baseColor);
 	formatSwatch(m_borderSwatchBtn, theme.borderColor.isEmpty() ? theme.accentColor : theme.borderColor);
 	formatSwatch(m_windowSwatchBtn, theme.windowColor);
+
+	for (const auto& pair : m_keyedSwatchBtns)
+	{
+		QString hex = ThemeManager::inst()->colorValue(pair.first);
+		if (!hex.isEmpty()) { formatSwatch(pair.second, hex); }
+	}
 
 	m_wallpaperPathEdit->setText(theme.backgroundPic);
 }
@@ -274,6 +325,23 @@ void ThemeDialog::onPickWindowColor()
 	if (dlg.exec() == QDialog::Accepted)
 	{
 		ThemeManager::inst()->setWindowColor(dlg.selectedColor());
+		updateSwatches();
+	}
+}
+
+void ThemeDialog::onPickKeyedColor()
+{
+	auto* btn = qobject_cast<QPushButton*>(sender());
+	if (btn == nullptr) { return; }
+
+	const QString key = btn->property("colorKey").toString();
+	QString currentHex = ThemeManager::inst()->colorValue(key);
+	if (currentHex.isEmpty()) { return; }
+
+	ColorChooser dlg(QColor(currentHex), this);
+	if (dlg.exec() == QDialog::Accepted)
+	{
+		ThemeManager::inst()->setThemeColor(key, dlg.selectedColor());
 		updateSwatches();
 	}
 }

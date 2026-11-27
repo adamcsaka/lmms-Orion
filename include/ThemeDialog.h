@@ -21,13 +21,18 @@
 
 #include <QDialog>
 #include <QComboBox>
+#include <QHash>
 #include <QPushButton>
 #include <QLineEdit>
 #include <QCheckBox>
 #include <QLabel>
+#include <QPair>
+#include <QVector>
 
 #include "ThemeManager.h"
 #include "lmms_export.h"
+
+class QGridLayout;
 
 namespace lmms::gui
 {
@@ -44,6 +49,7 @@ private slots:
 	void onPickBaseColor();
 	void onPickBorderColor();
 	void onPickWindowColor();
+	void onPickKeyedColor();
 	void onBrowseWallpaper();
 	void onClearWallpaper();
 	void onSaveAsPreset();
@@ -53,12 +59,17 @@ private slots:
 private:
 	void updateSwatches();
 	void populatePresets();
+	void addColorRow(const QString& label, const QString& key);
+	void formatSwatch(QPushButton* btn, const QString& hex);
 
 	QComboBox* m_presetCombo;
 	QPushButton* m_accentSwatchBtn;
 	QPushButton* m_baseSwatchBtn;
 	QPushButton* m_borderSwatchBtn;
 	QPushButton* m_windowSwatchBtn;
+	QVector<QPair<QString, QPushButton*>> m_keyedSwatchBtns;
+	::QGridLayout* m_keyedColorLayout = nullptr;
+	int m_keyedColorRow = 0;
 	QLineEdit* m_wallpaperPathEdit;
 	QCheckBox* m_saveWithProjectCheck;
 	QCheckBox* m_applyProjectThemesCheck;

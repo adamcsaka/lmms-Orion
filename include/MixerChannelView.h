@@ -31,6 +31,7 @@ class QGraphicsView;
 class QLabel;
 class QLineEdit;
 class QStackedWidget;
+class QToolButton;
 
 namespace lmms {
 class MixerChannel;
@@ -91,6 +92,7 @@ public slots:
 	void resetColor();
 	void selectColor();
 	void randomizeColor();
+	void toggleChannelEq();
 
 private slots:
 	void renameFinished();
@@ -113,6 +115,8 @@ private:
 	int m_sendButtonStackedIndex = -1;
 
 	Knob* m_sendKnob;
+	Knob* m_panKnob;
+	QToolButton* m_eqButton;
 	LcdWidget* m_channelNumberLcd;
 	QLineEdit* m_renameLineEdit;
 	QGraphicsView* m_renameLineEditView;

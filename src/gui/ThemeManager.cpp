@@ -35,6 +35,14 @@
 
 namespace lmms::gui {
 
+// Fills in derived colors for presets saved before the extended color set existed.
+static void fillDerivedThemeColors(ThemePreset& p)
+{
+	if (p.fieldColor.isEmpty()) { p.fieldColor = QColor(p.baseColor).darker(115).name(); }
+	if (p.sliderColor.isEmpty()) { p.sliderColor = QColor(p.baseColor).lighter(135).name(); }
+	if (p.headerColor.isEmpty()) { p.headerColor = QColor(p.baseColor).lighter(115).name(); }
+}
+
 ThemeManager* ThemeManager::inst()
 {
 	static ThemeManager s_instance;
@@ -85,6 +93,9 @@ void ThemeManager::initFactoryPresets()
 		p.noteColor = "#e5a93c";
 		p.selectedColor = "#996f24";
 		p.borderColor = "#e5a93c";
+		p.fieldColor = "#101114";
+		p.sliderColor = "#33363c";
+		p.headerColor = "#22242a";
 		p.backgroundPic = "";
 		m_factoryPresets.append(p);
 	}
@@ -105,6 +116,9 @@ void ThemeManager::initFactoryPresets()
 		p.noteColor = "#00e5ff";
 		p.selectedColor = "#0277bd";
 		p.borderColor = "#00e5ff";
+		p.fieldColor = "#0a0b12";
+		p.sliderColor = "#262a3d";
+		p.headerColor = "#1a1d2e";
 		p.backgroundPic = "";
 		m_factoryPresets.append(p);
 	}
@@ -125,6 +139,9 @@ void ThemeManager::initFactoryPresets()
 		p.noteColor = "#10b981";
 		p.selectedColor = "#047857";
 		p.borderColor = "#10b981";
+		p.fieldColor = "#121316";
+		p.sliderColor = "#33353b";
+		p.headerColor = "#26282e";
 		p.backgroundPic = "";
 		m_factoryPresets.append(p);
 	}
@@ -145,6 +162,9 @@ void ThemeManager::initFactoryPresets()
 		p.noteColor = "#f59e0b";
 		p.selectedColor = "#b45309";
 		p.borderColor = "#f59e0b";
+		p.fieldColor = "#12151a";
+		p.sliderColor = "#333a44";
+		p.headerColor = "#252b34";
 		p.backgroundPic = "";
 		m_factoryPresets.append(p);
 	}
@@ -165,6 +185,9 @@ void ThemeManager::initFactoryPresets()
 		p.noteColor = "#0bd556";
 		p.selectedColor = "#064d79";
 		p.borderColor = "#5c6b7a";
+		p.fieldColor = "#1a1b1d";
+		p.sliderColor = "#3f4145";
+		p.headerColor = "#33343a";
 		p.backgroundPic = "";
 		m_factoryPresets.append(p);
 	}
@@ -183,6 +206,7 @@ void ThemeManager::applyTheme(const ThemePreset& preset, bool markProject)
 {
 	ensureBaseStyleSheetLoaded();
 	m_currentTheme = preset;
+	fillDerivedThemeColors(m_currentTheme);
 
 	if (markProject)
 	{
@@ -256,6 +280,58 @@ void ThemeManager::setWindowColor(const QColor& color)
 	applyTheme(m_currentTheme, true);
 }
 
+QString ThemeManager::colorValue(const QString& key) const
+{
+	const auto& t = m_currentTheme;
+	if (key == QLatin1String("accent")) { return t.accentColor; }
+	if (key == QLatin1String("accentHover")) { return t.accentHover; }
+	if (key == QLatin1String("textActive")) { return t.textActive; }
+	if (key == QLatin1String("textColor")) { return t.textColor; }
+	if (key == QLatin1String("base")) { return t.baseColor; }
+	if (key == QLatin1String("window")) { return t.windowColor; }
+	if (key == QLatin1String("border")) { return t.borderColor.isEmpty() ? t.accentColor : t.borderColor; }
+	if (key == QLatin1String("grid")) { return t.gridColor; }
+	if (key == QLatin1String("beatLine")) { return t.beatLineColor; }
+	if (key == QLatin1String("barLine")) { return t.barLineColor; }
+	if (key == QLatin1String("note")) { return t.noteColor; }
+	if (key == QLatin1String("selected")) { return t.selectedColor; }
+	if (key == QLatin1String("field")) { return t.fieldColor; }
+	if (key == QLatin1String("slider")) { return t.sliderColor; }
+	if (key == QLatin1String("header")) { return t.headerColor; }
+	return QString();
+}
+
+void ThemeManager::setThemeColor(const QString& key, const QColor& color)
+{
+	if (!color.isValid()) { return; }
+
+	// The accent color drives several derived colors, keep using its dedicated setter.
+	if (key == QLatin1String("accent"))
+	{
+		setAccentColor(color);
+		return;
+	}
+
+	auto& t = m_currentTheme;
+	if (key == QLatin1String("accentHover")) { t.accentHover = color.name(); }
+	else if (key == QLatin1String("textActive")) { t.textActive = color.name(); }
+	else if (key == QLatin1String("textColor")) { t.textColor = color.name(); }
+	else if (key == QLatin1String("base")) { t.baseColor = color.name(); }
+	else if (key == QLatin1String("window")) { t.windowColor = color.name(); }
+	else if (key == QLatin1String("border")) { t.borderColor = color.name(); }
+	else if (key == QLatin1String("grid")) { t.gridColor = color.name(); }
+	else if (key == QLatin1String("beatLine")) { t.beatLineColor = color.name(); }
+	else if (key == QLatin1String("barLine")) { t.barLineColor = color.name(); }
+	else if (key == QLatin1String("note")) { t.noteColor = color.name(); }
+	else if (key == QLatin1String("selected")) { t.selectedColor = color.name(); }
+	else if (key == QLatin1String("field")) { t.fieldColor = color.name(); }
+	else if (key == QLatin1String("slider")) { t.sliderColor = color.name(); }
+	else if (key == QLatin1String("header")) { t.headerColor = color.name(); }
+	else { return; }
+
+	applyTheme(m_currentTheme, true);
+}
+
 void ThemeManager::setBackgroundPicture(const QString& path)
 {
 	m_currentTheme.backgroundPic = path;
@@ -304,6 +380,9 @@ void ThemeManager::saveProjectTheme(QDomDocument& doc, QDomElement& parent)
 	elem.setAttribute("selected", m_currentTheme.selectedColor);
 	elem.setAttribute(
 		"border", m_currentTheme.borderColor.isEmpty() ? m_currentTheme.accentColor : m_currentTheme.borderColor);
+	elem.setAttribute("field", m_currentTheme.fieldColor);
+	elem.setAttribute("slider", m_currentTheme.sliderColor);
+	elem.setAttribute("header", m_currentTheme.headerColor);
 
 	// Store background image as relative path if located inside project directory
 	QString bg = m_currentTheme.backgroundPic;
@@ -345,6 +424,10 @@ void ThemeManager::loadProjectTheme(const QDomElement& elem, const QString& proj
 	p.noteColor = elem.attribute("note", "#e5a93c");
 	p.selectedColor = elem.attribute("selected", "#996f24");
 	p.borderColor = elem.attribute("border", p.accentColor);
+	p.fieldColor = elem.attribute("field", "");
+	p.sliderColor = elem.attribute("slider", "");
+	p.headerColor = elem.attribute("header", "");
+	fillDerivedThemeColors(p);
 
 	QString bg = elem.attribute("bg", "");
 	if (!bg.isEmpty())
@@ -390,6 +473,9 @@ bool ThemeManager::savePresetToFile(const QString& filePath, const ThemePreset& 
 	root["noteColor"] = p.noteColor;
 	root["selectedColor"] = p.selectedColor;
 	root["borderColor"] = p.borderColor.isEmpty() ? p.accentColor : p.borderColor;
+	root["fieldColor"] = p.fieldColor;
+	root["sliderColor"] = p.sliderColor;
+	root["headerColor"] = p.headerColor;
 	root["backgroundPic"] = p.backgroundPic;
 
 	QJsonDocument doc(root);
@@ -423,6 +509,10 @@ bool ThemeManager::loadPresetFromFile(const QString& filePath, ThemePreset& p)
 	p.selectedColor = root["selectedColor"].toString();
 	p.borderColor = root["borderColor"].toString();
 	if (p.borderColor.isEmpty()) p.borderColor = p.accentColor;
+	p.fieldColor = root["fieldColor"].toString();
+	p.sliderColor = root["sliderColor"].toString();
+	p.headerColor = root["headerColor"].toString();
+	fillDerivedThemeColors(p);
 	p.backgroundPic = root["backgroundPic"].toString();
 	return true;
 }
@@ -567,6 +657,130 @@ QString ThemeManager::generateThemeQss(const ThemePreset& p) const
 	// Progress bars
 	ts << "QProgressBar::chunk {\n"
 	   << "    background-color: " << p.accentColor << ";\n"
+	   << "}\n";
+
+	// Extended palette: input fields, sliders/scrollbars, headers & tooltips
+	QColor field(p.fieldColor.isEmpty() ? base.darker(115).name() : p.fieldColor);
+	QColor slider(p.sliderColor.isEmpty() ? base.lighter(135).name() : p.sliderColor);
+	QColor header(p.headerColor.isEmpty() ? base.lighter(115).name() : p.headerColor);
+
+	// General text color across common foreground widgets
+	ts << "\n/* General text color */\n"
+	   << "QLabel, QCheckBox, QGroupBox, QTreeWidget, QListWidget, QAbstractItemView {\n"
+	   << "    color: " << p.textColor << ";\n"
+	   << "}\n";
+
+	// Input fields: line edits, text edits, spin boxes, combo boxes
+	ts << "\n/* Input fields */\n"
+	   << "QLineEdit, QTextEdit, QSpinBox, QDoubleSpinBox, QComboBox {\n"
+	   << "    background-color: " << field.name() << ";\n"
+	   << "    color: " << p.textColor << ";\n"
+	   << "    border: 1px solid " << border.name() << ";\n"
+	   << "    border-radius: 4px;\n"
+	   << "    padding: 2px 4px;\n"
+	   << "}\n"
+	   << "QLineEdit:focus, QTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {\n"
+	   << "    border: 1px solid " << p.accentColor << ";\n"
+	   << "}\n"
+	   << "QComboBox::drop-down {\n"
+	   << "    border: none;\n"
+	   << "    width: 18px;\n"
+	   << "}\n"
+	   << "QComboBox QAbstractItemView {\n"
+	   << "    background-color: " << field.name() << ";\n"
+	   << "    color: " << p.textColor << ";\n"
+	   << "    selection-background-color: " << p.accentColor << ";\n"
+	   << "    selection-color: " << p.textActive << ";\n"
+	   << "}\n";
+
+	// Sliders and scrollbars
+	ts << "\n/* Sliders and scrollbars */\n"
+	   << "QScrollBar:horizontal {\n"
+	   << "    border-top: 1px solid " << border.name() << ";\n"
+	   << "    background: " << slider.name() << ";\n"
+	   << "    height: 12px;\n"
+	   << "    margin: 0px 12px;\n"
+	   << "}\n"
+	   << "QScrollBar:vertical {\n"
+	   << "    border-left: 1px solid " << border.name() << ";\n"
+	   << "    background: " << slider.name() << ";\n"
+	   << "    width: 12px;\n"
+	   << "    margin: 12px 0px;\n"
+	   << "}\n"
+	   << "QScrollBar::handle:horizontal {\n"
+	   << "    background: " << p.accentColor << ";\n"
+	   << "    border: none;\n"
+	   << "    border-radius: 4px;\n"
+	   << "    min-width: 24px;\n"
+	   << "}\n"
+	   << "QScrollBar::handle:horizontal:hover {\n"
+	   << "    background: " << p.accentHover << ";\n"
+	   << "}\n"
+	   << "QScrollBar::handle:horizontal:pressed {\n"
+	   << "    background: " << accent.darker(140).name() << ";\n"
+	   << "}\n"
+	   << "QScrollBar::handle:vertical {\n"
+	   << "    background: " << p.accentColor << ";\n"
+	   << "    border: none;\n"
+	   << "    border-radius: 4px;\n"
+	   << "    min-height: 24px;\n"
+	   << "}\n"
+	   << "QScrollBar::handle:vertical:hover {\n"
+	   << "    background: " << p.accentHover << ";\n"
+	   << "}\n"
+	   << "QScrollBar::handle:vertical:pressed {\n"
+	   << "    background: " << accent.darker(140).name() << ";\n"
+	   << "}\n"
+	   << "QSlider::groove:horizontal {\n"
+	   << "    background: " << slider.name() << ";\n"
+	   << "    height: 6px;\n"
+	   << "    border-radius: 3px;\n"
+	   << "}\n"
+	   << "QSlider::groove:vertical {\n"
+	   << "    background: " << slider.name() << ";\n"
+	   << "    width: 6px;\n"
+	   << "    border-radius: 3px;\n"
+	   << "}\n"
+	   << "QSlider::handle:horizontal {\n"
+	   << "    background: " << p.accentColor << ";\n"
+	   << "    border: 1px solid " << border.name() << ";\n"
+	   << "    border-radius: 7px;\n"
+	   << "    width: 14px;\n"
+	   << "    margin: -5px 0;\n"
+	   << "}\n"
+	   << "QSlider::handle:vertical {\n"
+	   << "    background: " << p.accentColor << ";\n"
+	   << "    border: 1px solid " << border.name() << ";\n"
+	   << "    border-radius: 7px;\n"
+	   << "    height: 14px;\n"
+	   << "    margin: 0 -5px;\n"
+	   << "}\n";
+
+	// Group boxes, dock titles and tooltips
+	ts << "\n/* Headers, group boxes and tooltips */\n"
+	   << "QGroupBox {\n"
+	   << "    background-color: " << header.name() << ";\n"
+	   << "    color: " << p.textColor << ";\n"
+	   << "    border: 1px solid " << border.name() << ";\n"
+	   << "    border-radius: 6px;\n"
+	   << "    margin-top: 10px;\n"
+	   << "    padding-top: 6px;\n"
+	   << "}\n"
+	   << "QGroupBox::title {\n"
+	   << "    subcontrol-origin: margin;\n"
+	   << "    subcontrol-position: top left;\n"
+	   << "    left: 8px;\n"
+	   << "    padding: 0 4px;\n"
+	   << "    color: " << p.textColor << ";\n"
+	   << "}\n"
+	   << "QDockWidget::title {\n"
+	   << "    background-color: " << header.name() << ";\n"
+	   << "    color: " << p.textColor << ";\n"
+	   << "}\n"
+	   << "QToolTip {\n"
+	   << "    background-color: " << header.name() << ";\n"
+	   << "    color: " << p.textColor << ";\n"
+	   << "    border: 1px solid " << border.name() << ";\n"
 	   << "}\n";
 
 	return qss;

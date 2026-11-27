@@ -60,6 +60,7 @@ public:
 	BoolModel m_muteModel;
 	BoolModel m_soloModel;
 	FloatModel m_volumeModel;
+	FloatModel m_panModel;
 	QString m_name;
 	QMutex m_lock;
 	bool m_queued; // are we queued up for rendering yet?

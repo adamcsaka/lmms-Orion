@@ -556,6 +556,69 @@ void EffectRackView::randomizeEffects()
 }
 
 
+Effect* EffectRackView::addEffectByName(const QString& pluginName)
+{
+	if (!fxChain()) { return nullptr; }
+
+	Effect* fx = Effect::instantiate(pluginName, fxChain(), nullptr);
+	if (fx == nullptr || !fx->isOkay())
+	{
+		delete fx;
+		return nullptr;
+	}
+
+	fxChain()->appendEffect(fx);
+	update();
+
+	if (Engine::getSong())
+	{
+		Engine::getSong()->setModified();
+	}
+
+	for (const auto& effectView : m_effectViews)
+	{
+		if (effectView->effect() == fx)
+		{
+			effectView->editControls();
+			break;
+		}
+	}
+
+	return fx;
+}
+
+
+void EffectRackView::editEffectControls(Effect* effect)
+{
+	if (effect == nullptr) { return; }
+
+	for (const auto& effectView : m_effectViews)
+	{
+		if (effectView->effect() == effect)
+		{
+			effectView->editControls();
+			return;
+		}
+	}
+}
+
+
+Effect* EffectRackView::findEffectByPluginName(const QString& pluginName) const
+{
+	if (!fxChain()) { return nullptr; }
+
+	for (Effect* e : fxChain()->effects())
+	{
+		if (e->descriptor() != nullptr && pluginName == QString::fromUtf8(e->descriptor()->name))
+		{
+			return e;
+		}
+	}
+
+	return nullptr;
+}
+
+
 
 
 } // namespace lmms::gui

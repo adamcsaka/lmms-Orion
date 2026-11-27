@@ -59,6 +59,14 @@ public slots:
 	void loadEffectChain();
 	void randomizeEffects();
 
+	// Inserts the named plugin into the chain, updates the view and opens its
+	// control dialog. Returns the created effect or nullptr on failure.
+	Effect* addEffectByName(const QString& pluginName);
+	// Opens (or toggles) the control dialog of the view belonging to the given effect.
+	void editEffectControls(Effect* effect);
+	// Returns the first effect in the chain whose plugin name matches, or nullptr.
+	Effect* findEffectByPluginName(const QString& pluginName) const;
+
 private slots:
 	virtual void update();
 	void addEffect();

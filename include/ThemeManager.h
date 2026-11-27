@@ -46,6 +46,9 @@ struct LMMS_EXPORT ThemePreset
 	QString noteColor;          // Piano roll note color
 	QString selectedColor;      // Selection highlight
 	QString borderColor;        // Window frames and borders
+	QString fieldColor;         // Input fields: line edits, spin boxes, combo boxes
+	QString sliderColor;        // Sliders, scrollbars and fader troughs
+	QString headerColor;        // Group boxes, dock titles, tooltips
 	QString backgroundPic;      // Optional wallpaper path
 	bool isProjectTheme = false;// Whether this is custom to the current project
 };
@@ -66,6 +69,13 @@ public:
 	void setBaseColor(const QColor& color);
 	void setBorderColor(const QColor& color);
 	void setWindowColor(const QColor& color);
+	// Returns the current hex color value for the given key (see setThemeColor),
+	// or an empty string for unknown keys.
+	QString colorValue(const QString& key) const;
+	// Generic setter: key is one of "accent", "accentHover", "textActive",
+	// "textColor", "base", "window", "border", "grid", "beatLine", "barLine",
+	// "note", "selected", "field", "slider", "header".
+	void setThemeColor(const QString& key, const QColor& color);
 	void setBackgroundPicture(const QString& path);
 	void clearBackgroundPicture();
 

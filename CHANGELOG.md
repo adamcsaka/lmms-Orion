@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v8.0.0-original] - 2026-11-27
+
+> Continuation line branched from **v7.0.0** (`02626bedb`) plus the safe GUI-only theme commits (`8f248f074`, `4f3c18286`). The unstable v8 engine experiments (minimap, polyphony rework, arp DSP, cent detune) are intentionally excluded.
+
+### Added
+- **Per-Channel Mixer Panning (`MixerChannel::m_panModel`):** Every mixer channel (including Master) now has an automatable pan control (-100..+100, center-detented). Implemented as a post-fader gain stage in `MixerChannel::doProcessing()` with sample-exact `ValueBuffer` support for smooth automation, full project save/load (`<pan>` attribute), channel duplication support, and a dedicated `Pan` knob rendered next to the channel fader in `MixerChannelView`.
+- **One-Click Parametric EQ on Mixer Channels:** New `EQ` button on every mixer channel strip and a `Parametric EQ...` context-menu entry. Inserts (or re-opens) the native 8-band parametric `eq` effect directly into that channel's FX chain via the new `EffectRackView::addEffectByName()` / `editEffectControls()` / `findEffectByPluginName()` helpers. All EQ parameters are `FloatModel`-based and fully automatable through the standard automation-track drag & drop workflow.
+- **Extended Precise Theme Color Customization:** The Theme & Appearance dialog now exposes 11 additional precise color targets in a scrollable section — Accent Hover, Text on Accent, General Text, Grid Lines, Beat Lines, Bar Lines, Note, Selection, Input Fields, Sliders & Scrollbars, and Headers & Group Boxes — on top of the existing Accent/Base/Border/Window pickers.
+- **New Theme Palette Fields (`fieldColor`, `sliderColor`, `headerColor`):** `ThemePreset` gained three new colors driving generated QSS for input fields (line edits, spin boxes, combo boxes with accent focus borders), sliders/scrollbars (themed troughs + accent handles), and headers (group boxes, dock titles, tooltips). All five factory presets ship tuned values; missing values in older `.lmms-theme` presets and `<projecttheme>` XML blocks are auto-derived from the base color for backward compatibility.
+- **Global Text & Widget QSS Coverage:** The dynamic theme stylesheet now recolors general foreground text (`QLabel`, `QCheckBox`, `QGroupBox`, item views), input fields, scrollbars, sliders, group boxes, dock titles and tooltips — so custom themes visibly propagate across the whole interface instead of only a handful of widgets.
+
+### Build & Packaging
+- **`deploy-v8.ps1`:** New portable deployment script producing `C:\Users\ahsoka\Downloads\LMMS-Orion-v8-original` plus a compressed `LMMS-Orion-v8-original.zip` archive.
+- **`WANT_SWH=OFF` build configuration:** The optional swh LADSPA pack stays disabled (it was never built on this machine — its Perl `List::MoreUtils`/`XML::Parser` modules are unavailable); this matches all previous local builds.
+- **`build-only.ps1`:** Lightweight incremental ninja wrapper reserving 3-4 CPU cores (`ProcessorCount - 4`).
+
+---
+
 ## [v7.0.0] - 2026-11-23
 
 ### Added
