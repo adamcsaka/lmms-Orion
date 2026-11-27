@@ -198,10 +198,11 @@ private:
 	void resizeToHeight(int height);
 	void updateSelectionOverlay();
 
-	// Pending shift+click track-range selection: if the press turns into a
-	// drag it becomes the regular track-resize gesture instead.
-	enum class PendingSelection { None, Range };
+	// Pending head-area gestures: a drag turns into rubber-band track
+	// selection (plain) or the legacy track-resize (shift).
+	enum class PendingSelection { None, Range, DragSelect };
 	PendingSelection m_pendingSelection = PendingSelection::None;
+	bool m_dragSelecting = false;
 	QPoint m_pressPos;
 	QWidget* m_selectionOverlay = nullptr;
 

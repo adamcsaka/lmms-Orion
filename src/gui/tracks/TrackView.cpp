@@ -267,7 +267,9 @@ void TrackView::mousePressEvent( QMouseEvent * me )
 			me->accept();
 			return;
 		}
-		m_trackContainerView->selectOnlyTrackView(this);
+		// Defer: a plain click selects only this track on release,
+		// a vertical drag rubber-band selects a range of tracks.
+		m_pendingSelection = PendingSelection::DragSelect;
 		me->accept();
 		return;
 	}
@@ -308,6 +310,36 @@ void TrackView::mouseMoveEvent( QMouseEvent * me )
 		m_action = Action::Resize;
 		QCursor::setPos(mapToGlobal(QPoint(pos.x(), height())));
 		QApplication::setOverrideCursor(Qt::SizeVerCursor);
+	}
+
+	if (m_pendingSelection == PendingSelection::DragSelect &&
+		(me->pos() - m_pressPos).manhattanLength() > 4)
+	{
+		m_pendingSelection = PendingSelection::None;
+		m_dragSelecting = true;
+	}
+
+	if (m_dragSelecting)
+	{
+		// Rubber-band selection over the track headers.
+		const int yPos =
+			m_trackContainerView->contentWidget()->mapFromGlobal(me->globalPosition().toPoint()).y();
+		TrackView* under = const_cast<TrackView*>(m_trackContainerView->trackViewAt(yPos));
+		if (under == nullptr)
+		{
+			// Clamp to the first/last track when the cursor leaves the list.
+			const auto& views = m_trackContainerView->trackViews();
+			if (!views.isEmpty())
+			{
+				under = (yPos < 0) ? views.first() : views.last();
+			}
+		}
+		if (under != nullptr)
+		{
+			m_trackContainerView->selectTrackViewRange(this, under);
+		}
+		me->accept();
+		return;
 	}
 
 	int widgetTotal = ConfigManager::inst()->value( "ui",
@@ -372,6 +404,13 @@ void TrackView::mouseReleaseEvent( QMouseEvent * me )
 			m_trackContainerView->selectOnlyTrackView(this);
 		}
 	}
+	else if (m_pendingSelection == PendingSelection::DragSelect)
+	{
+		// Plain click without drag: single-track selection.
+		m_pendingSelection = PendingSelection::None;
+		m_trackContainerView->selectOnlyTrackView(this);
+	}
+	m_dragSelecting = false;
 	m_action = Action::None;
 	while( QApplication::overrideCursor() != nullptr )
 	{

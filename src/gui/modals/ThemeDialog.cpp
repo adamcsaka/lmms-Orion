@@ -20,6 +20,7 @@
 #include "ColorChooser.h"
 #include "ConfigManager.h"
 #include "embed.h"
+#include "lmms_math.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -71,6 +72,7 @@ ThemeDialog::ThemeDialog(QWidget* parent) :
 	m_accentSwatchBtn->setCursor(Qt::PointingHandCursor);
 	connect(m_accentSwatchBtn, &QPushButton::clicked, this, &ThemeDialog::onPickAccentColor);
 	colorLayout->addWidget(m_accentSwatchBtn, 0, 1);
+	colorLayout->addWidget(makeRandomColorButton(QStringLiteral("accent"), colorGroup), 0, 2);
 
 	colorLayout->addWidget(new QLabel(tr("Base Panel Color (Toolbars, Menus):"), colorGroup), 1, 0);
 	m_baseSwatchBtn = new QPushButton(colorGroup);
@@ -78,6 +80,7 @@ ThemeDialog::ThemeDialog(QWidget* parent) :
 	m_baseSwatchBtn->setCursor(Qt::PointingHandCursor);
 	connect(m_baseSwatchBtn, &QPushButton::clicked, this, &ThemeDialog::onPickBaseColor);
 	colorLayout->addWidget(m_baseSwatchBtn, 1, 1);
+	colorLayout->addWidget(makeRandomColorButton(QStringLiteral("base"), colorGroup), 1, 2);
 
 	colorLayout->addWidget(new QLabel(tr("Window Borders & Frames Color:"), colorGroup), 2, 0);
 	m_borderSwatchBtn = new QPushButton(colorGroup);
@@ -85,6 +88,7 @@ ThemeDialog::ThemeDialog(QWidget* parent) :
 	m_borderSwatchBtn->setCursor(Qt::PointingHandCursor);
 	connect(m_borderSwatchBtn, &QPushButton::clicked, this, &ThemeDialog::onPickBorderColor);
 	colorLayout->addWidget(m_borderSwatchBtn, 2, 1);
+	colorLayout->addWidget(makeRandomColorButton(QStringLiteral("border"), colorGroup), 2, 2);
 
 	colorLayout->addWidget(new QLabel(tr("Workspace Background Color:"), colorGroup), 3, 0);
 	m_windowSwatchBtn = new QPushButton(colorGroup);
@@ -92,6 +96,7 @@ ThemeDialog::ThemeDialog(QWidget* parent) :
 	m_windowSwatchBtn->setCursor(Qt::PointingHandCursor);
 	connect(m_windowSwatchBtn, &QPushButton::clicked, this, &ThemeDialog::onPickWindowColor);
 	colorLayout->addWidget(m_windowSwatchBtn, 3, 1);
+	colorLayout->addWidget(makeRandomColorButton(QStringLiteral("window"), colorGroup), 3, 2);
 
 	// Extended precise color customization (scrollable area)
 	auto keyedContainer = new QWidget(colorGroup);
@@ -118,7 +123,12 @@ ThemeDialog::ThemeDialog(QWidget* parent) :
 	keyedScroll->setFrameShape(QFrame::NoFrame);
 	keyedScroll->setFixedHeight(190);
 	keyedScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-	colorLayout->addWidget(keyedScroll, 4, 0, 1, 2);
+	colorLayout->addWidget(keyedScroll, 4, 0, 1, 3);
+
+	auto* randomizeAllBtn = new QPushButton(tr("Randomize all colors"), colorGroup);
+	randomizeAllBtn->setToolTip(tr("Assign a random color to every theme color target"));
+	connect(randomizeAllBtn, &QPushButton::clicked, this, &ThemeDialog::onRandomizeAllColors);
+	colorLayout->addWidget(randomizeAllBtn, 5, 0, 1, 3);
 
 	mainLayout->addWidget(colorGroup);
 
@@ -241,7 +251,44 @@ void ThemeDialog::addColorRow(const QString& label, const QString& key)
 	const int row = m_keyedColorRow++;
 	m_keyedColorLayout->addWidget(rowLabel, row, 0);
 	m_keyedColorLayout->addWidget(btn, row, 1);
+	m_keyedColorLayout->addWidget(makeRandomColorButton(key, m_keyedColorLayout->parentWidget()), row, 2);
 	m_keyedSwatchBtns.append({key, btn});
+}
+
+QPushButton* ThemeDialog::makeRandomColorButton(const QString& key, QWidget* parent)
+{
+	auto* btn = new QPushButton(tr("R"), parent);
+	btn->setFixedWidth(30);
+	btn->setMinimumHeight(24);
+	btn->setCursor(Qt::PointingHandCursor);
+	btn->setToolTip(tr("Random color"));
+	connect(btn, &QPushButton::clicked, this, [this, key]() { randomizeThemeColor(key); });
+	return btn;
+}
+
+QColor ThemeDialog::randomColor()
+{
+	return QColor::fromHsv(fastRand(360), fastRand(70, 255), fastRand(90, 255));
+}
+
+void ThemeDialog::randomizeThemeColor(const QString& key)
+{
+	ThemeManager::inst()->setThemeColor(key, randomColor());
+	updateSwatches();
+}
+
+void ThemeDialog::onRandomizeAllColors()
+{
+	static const char* keys[] = {
+		"accent", "accentHover", "textActive", "textColor", "base", "window",
+		"border", "grid", "beatLine", "barLine", "note", "selected",
+		"field", "slider", "header"
+	};
+	for (const char* key : keys)
+	{
+		ThemeManager::inst()->setThemeColor(QString::fromLatin1(key), randomColor());
+	}
+	updateSwatches();
 }
 
 void ThemeDialog::formatSwatch(QPushButton* btn, const QString& hex)

@@ -421,7 +421,11 @@ PatternEditorWindow::PatternEditorWindow(PatternStore* ps) :
 
 		if (lengthDialog.exec() == QDialog::Accepted)
 		{
-			ConfigManager::inst()->setPatternLengthCap(unlimitedCheck->isChecked() ? 0.0 : barsSpin->value());
+			const double newCap = unlimitedCheck->isChecked() ? 0.0 : barsSpin->value();
+			ConfigManager::inst()->setPatternLengthCap(newCap);
+			// Persist the cap inside the project file as well, so each
+			// project remembers the limit it was saved with.
+			Engine::patternStore()->setLengthCapOverride(newCap);
 			m_editor->updateMaxSteps();
 
 			// Pattern clip views in the Song Editor cache their rendered

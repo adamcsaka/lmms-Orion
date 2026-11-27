@@ -88,6 +88,27 @@ void PatternStore::updateAfterTrackAdd()
 }
 
 
+void PatternStore::saveSettings(QDomDocument & doc, QDomElement & parent)
+{
+	TrackContainer::saveSettings(doc, parent);
+	if (m_lengthCapOverride.has_value())
+	{
+		parent.setAttribute("patternlengthcap", QString::number(*m_lengthCapOverride, 'g', 16));
+	}
+}
+
+
+void PatternStore::loadSettings(const QDomElement & elem)
+{
+	TrackContainer::loadSettings(elem);
+	m_lengthCapOverride.reset();
+	if (elem.hasAttribute("patternlengthcap"))
+	{
+		m_lengthCapOverride = elem.attribute("patternlengthcap").toDouble();
+	}
+}
+
+
 
 
 bar_t PatternStore::lengthOfPattern(int pattern) const
@@ -100,7 +121,7 @@ bar_t PatternStore::lengthOfPattern(int pattern) const
 	// User-configurable cap in bars (fractional values allowed). Non-positive
 	// values mean "unlimited" and fall back to a hard safety bound so that
 	// pathological clip-length combinations cannot exhaust memory.
-	const double capBars = ConfigManager::inst()->patternLengthCap();
+	const double capBars = m_lengthCapOverride.value_or(ConfigManager::inst()->patternLengthCap());
 	const std::int64_t userCapTicks = capBars > 0.0
 		? static_cast<std::int64_t>(capBars * static_cast<double>(TimePos::ticksPerBar()))
 		: -1;

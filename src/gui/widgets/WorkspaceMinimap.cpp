@@ -95,7 +95,8 @@ void WorkspaceMinimap::panToPoint(const QPoint& minimapPos)
 
 	for (auto* sw : m_workspace->subWindowList())
 	{
-		if (sw && !sw->isMaximized())
+		// Never move the minimap itself - it must stay where the user placed it.
+		if (sw && !sw->isMaximized() && sw->widget() != this)
 		{
 			sw->move(sw->x() + deltaX, sw->y() + deltaY);
 		}

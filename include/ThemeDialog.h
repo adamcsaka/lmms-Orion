@@ -55,12 +55,16 @@ private slots:
 	void onSaveAsPreset();
 	void onResetToDefault();
 	void onApplyProjectThemesToggled(bool checked);
+	void onRandomizeAllColors();
 
 private:
 	void updateSwatches();
 	void populatePresets();
 	void addColorRow(const QString& label, const QString& key);
 	void formatSwatch(QPushButton* btn, const QString& hex);
+	void randomizeThemeColor(const QString& key);
+	static QColor randomColor();
+	QPushButton* makeRandomColorButton(const QString& key, QWidget* parent);
 
 	QComboBox* m_presetCombo;
 	QPushButton* m_accentSwatchBtn;

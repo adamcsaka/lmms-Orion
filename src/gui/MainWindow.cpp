@@ -1740,7 +1740,9 @@ void MainWindow::MovableQMdiArea::mouseMoveEvent(QMouseEvent* event)
 	{
 		// if widgets are maximized, then they shouldn't be moved
 		// moving a maximized window's normalGeometry is not implemented because of difficulties
-		if (curWindow->isMaximized() == false)
+		// the workspace minimap is pinned: it must stay where the user placed it
+		if (curWindow->isMaximized() == false &&
+			dynamic_cast<WorkspaceMinimap*>(curWindow->widget()) == nullptr)
 		{
 			curWindow->move(curWindow->x() - scrollX, curWindow->y() - scrollY);
 		}
@@ -1796,7 +1798,9 @@ void MainWindow::MovableQMdiArea::setZoomLevel(float newZoom, const QPoint& cent
 
 	for (auto* curWindow : subWindowList())
 	{
-		if (curWindow && !curWindow->isMaximized())
+		// the minimap window itself is excluded so it stays pinned in place
+		if (curWindow && !curWindow->isMaximized() &&
+			dynamic_cast<WorkspaceMinimap*>(curWindow->widget()) == nullptr)
 		{
 			int newX = center.x() + static_cast<int>((curWindow->x() - center.x()) * actualFactor);
 			int newY = center.y() + static_cast<int>((curWindow->y() - center.y()) * actualFactor);

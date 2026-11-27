@@ -26,7 +26,10 @@
 #define LMMS_PATTERN_STORE_H
 
 #include "TrackContainer.h"
+#include <QDomDocument>
+#include <QDomElement>
 #include <QTimer>
+#include <optional>
 #include "ComboBoxModel.h"
 
 namespace lmms
@@ -97,6 +100,15 @@ public:
 	RecordMode recordMode() const { return m_recordMode; }
 	void setRecordMode(RecordMode mode) { m_recordMode = mode; }
 
+	// Optional per-project override of the pattern length cap (bars,
+	// non-positive = unlimited). When unset, the global ConfigManager
+	// "patterns/lengthcap" value applies. Persisted in the project file.
+	void setLengthCapOverride(std::optional<double> cap) { m_lengthCapOverride = cap; }
+	std::optional<double> lengthCapOverride() const { return m_lengthCapOverride; }
+
+	void saveSettings(QDomDocument & _doc, QDomElement & _parent) override;
+	void loadSettings(const QDomElement & _this) override;
+
 	bool isRecordingAutomation() const { return m_recordAutomation; }
 	void setRecordingAutomation(bool record);
 	void handleLiveAutomation(class AutomatableModel* model);
@@ -114,6 +126,7 @@ signals:
 
 private:
 	ComboBoxModel m_patternComboBoxModel;
+	std::optional<double> m_lengthCapOverride;
 	bool m_recordAutomation = false;
 	RecordMode m_recordMode = RecordMode::Touch;
 	QTimer m_automationIdleTimer;

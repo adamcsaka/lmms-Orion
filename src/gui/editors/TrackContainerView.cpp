@@ -175,7 +175,7 @@ void TrackContainerView::removeTrackView( TrackView * _tv )
 	int index = m_trackViews.indexOf( _tv );
 	if( index != -1 )
 	{
-		if( m_selectedTrackViews.remove( _tv ) > 0 || m_selectionAnchor == index )
+		if( m_selectedTrackViews.remove( _tv ) != 0 || m_selectionAnchor == index )
 		{
 			emit trackSelectionChanged();
 		}
