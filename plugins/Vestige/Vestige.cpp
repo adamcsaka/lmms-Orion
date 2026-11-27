@@ -1072,20 +1072,10 @@ void ManageVestigeInstrumentView::displayAutomatedOnly( void )
 
 ManageVestigeInstrumentView::~ManageVestigeInstrumentView()
 {
-	if( m_vi->knobFModel != nullptr )
-	{
-		for( int i = 0; i < m_vi->paramCount; i++ )
-		{
-			delete m_vi->knobFModel[ i ];
-			delete m_vstKnobs[i];
-		}
-	}
-
-	if( m_vi->knobFModel != nullptr )
-	{
-		delete [] m_vi->knobFModel;
-		m_vi->knobFModel = nullptr;
-	}
+	// knobFModel belongs to VestigeInstrument (it backs knob automation);
+	// the knobs themselves are Qt children of this view and are deleted
+	// automatically, so only clear our bookkeeping vector here.
+	m_vstKnobs.clear();
 
 	if (m_vi->m_scrollArea != nullptr) {
 		delete m_vi->m_scrollArea;

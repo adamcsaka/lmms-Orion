@@ -18,6 +18,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Changed
 - **Undo/Redo — Effect Rack coverage:** `EffectChain` is now a `JournallingObject` (its `saveSettings`/`loadSettings` already round-trip the full chain), so the whole FX rack state is journaled. `EffectRackView` calls `addJournalCheckPoint()` before every structural mutation: add/paste/load effect group, delete plugin, move up/down, randomize rack, clear all effects, and programmatic inserts (`addEffectByName`, e.g. mixer EQ quick-insert). FX deletions, rack randomization, and reordering are now undoable.
 - **Undo/Redo — Clip transforms:** `MidiClip::duplicateContent()` ("Double content") and `MidiClip::scaleContent()` ("Halve content", percentage scaling) now take a journal checkpoint, making clip duplication and percentage transforms undoable.
+- **Vestige knob automation fix:** `ManageVestigeInstrumentView`'s destructor no longer deletes the instrument-owned `knobFModel` array/elements (nor the Qt-child knobs it did not own). Previously, closing the plugin control window destroyed the automation backing models — breaking knob automation and risking a double-free when the instrument was destroyed. Vestige's per-parameter `FloatModel`s are `JournallingObject`s, so all synth knobs are now reliably automatable (drag = gesture recording, links persist in project files).
+
+### Removed
+- **ZynAddSubFX presets:** Deleted `data/presets/ZynAddSubFX` (962 `.xiz`/`.xpf` preset files) from the repository. The plugin binary was already excluded from portable packages (`zynaddsubfx.dll`, `RemoteZynAddSubFx.exe`) due to randomizer crashes; its preset library is now gone as well.
 
 ---
 
