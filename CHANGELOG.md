@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Removed
 - **ZynAddSubFX presets:** Deleted `data/presets/ZynAddSubFX` (962 `.xiz`/`.xpf` preset files) from the repository. The plugin binary was already excluded from portable packages (`zynaddsubfx.dll`, `RemoteZynAddSubFx.exe`) due to randomizer crashes; its preset library is now gone as well.
+- **Carla exclusion lifted:** `carlabase.dll`, `carlarack.dll`, `carlapatchbay.dll` (and the already-shipped `libcarla_native-plugin.dll` engine) are now included in portable packages again. CarlaRack is a full VST3/LV2/CLAP/VST2 instrument host whose every plugin parameter is backed by a journallable `CarlaParamFloatModel` — so knobs of hosted VST3 instruments are automatable (including gesture-based live recording). `vital.dll`, `oxosynth.dll`, and ZynAddSubFX remain excluded.
 
 ---
 
