@@ -25,11 +25,14 @@
 
 #include "PatternStore.h"
 
+#include <cstdint>
+#include <limits>
 #include <numeric>
 #include "AutomatableModel.h"
 #include "AutomationClip.h"
 #include "AutomationTrack.h"
 #include "Clip.h"
+#include "ConfigManager.h"
 #include "Engine.h"
 #include "PatternTrack.h"
 #include "Song.h"
@@ -90,7 +93,19 @@ void PatternStore::updateAfterTrackAdd()
 bar_t PatternStore::lengthOfPattern(int pattern) const
 {
 	tick_t maxTicks = TimePos::ticksPerBar();
-	tick_t polyTicks = TimePos::ticksPerBar();
+	// 64-bit accumulator: with user-defined (or unlimited) caps the LCM of clip
+	// lengths can exceed the tick_t range before the cap check below triggers.
+	std::int64_t polyTicks = TimePos::ticksPerBar();
+
+	// User-configurable cap in bars (fractional values allowed). Non-positive
+	// values mean "unlimited" and fall back to a hard safety bound so that
+	// pathological clip-length combinations cannot exhaust memory.
+	const double capBars = ConfigManager::inst()->patternLengthCap();
+	const std::int64_t userCapTicks = capBars > 0.0
+		? static_cast<std::int64_t>(capBars * static_cast<double>(TimePos::ticksPerBar()))
+		: -1;
+	constexpr std::int64_t hardCapTicks = 100000000; // ~5.2e5 bars @192 ticks/bar
+	const std::int64_t capTicks = userCapTicks > 0 ? userCapTicks : hardCapTicks;
 
 	const TrackList & tl = tracks();
 	for (Track * t : tl)
@@ -100,18 +115,19 @@ bar_t PatternStore::lengthOfPattern(int pattern) const
 			auto c = t->getClip(pattern);
 			if (c && c->length() > 0)
 			{
-				maxTicks = std::max(maxTicks, static_cast<tick_t>(c->length()));
-				polyTicks = std::lcm(polyTicks, static_cast<tick_t>(c->length()));
-				if (polyTicks > 32 * TimePos::ticksPerBar())
+				const tick_t clipTicks = static_cast<tick_t>(c->length());
+				maxTicks = std::max(maxTicks, clipTicks);
+				polyTicks = std::lcm(polyTicks, static_cast<std::int64_t>(clipTicks));
+				if (polyTicks > capTicks)
 				{
-					polyTicks = std::max(maxTicks, static_cast<tick_t>(32 * TimePos::ticksPerBar()));
+					polyTicks = std::max<std::int64_t>(maxTicks, capTicks);
 					break;
 				}
 			}
 		}
 	}
 
-	return TimePos(polyTicks).nextFullBar();
+	return TimePos(static_cast<tick_t>(std::min<std::int64_t>(polyTicks, std::numeric_limits<tick_t>::max()))).nextFullBar();
 }
 
 

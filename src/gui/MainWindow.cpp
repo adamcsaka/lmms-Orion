@@ -34,6 +34,7 @@
 #include <QMessageBox>
 #include <QShortcut>
 #include <QSplitter>
+#include <QWheelEvent>
 
 #include "AboutDialog.h"
 #include "AutomationEditor.h"
@@ -74,6 +75,7 @@
 #include "TemplatesMenu.h"
 #include "TextFloat.h"
 #include "ToolButton.h"
+#include "WorkspaceMinimap.h"
 #include "ToolPlugin.h"
 #include "VersionedSaveDialog.h"
 
@@ -86,6 +88,7 @@ namespace lmms::gui
 
 MainWindow::MainWindow() :
 	m_workspace( nullptr ),
+	m_minimap( nullptr ),
 	m_toolsMenu( nullptr ),
 	m_autoSaveTimer( this ),
 	m_viewMenu( nullptr ),
@@ -476,6 +479,12 @@ void MainWindow::finalize()
 		tr("Theme & Appearance") + " (Ctrl+8)", this, SLOT(showThemeDialog()), m_toolBar);
 	theme_window->setShortcut(keySequence(Qt::CTRL, Qt::Key_8));
 	m_toolBarLayout->addWidget( theme_window, 1, 8 );
+
+	auto minimap_window = new ToolButton(embed::getIconPixmap("zoom"),
+		tr("Workspace Radar & Minimap") + " (Ctrl+9)", this, SLOT(toggleMinimapWin()), m_toolBar);
+	minimap_window->setShortcut(keySequence(Qt::CTRL, Qt::Key_9));
+	m_toolBarLayout->addWidget( minimap_window, 1, 9 );
+
 	m_toolBarLayout->setColumnStretch( 100, 1 );
 
 	// setup-dialog opened before?
@@ -1047,6 +1056,17 @@ void MainWindow::toggleMicrotunerWin()
 	toggleWindow( getGUI()->getMicrotunerConfig() );
 }
 
+
+
+void MainWindow::toggleMinimapWin()
+{
+	if (!m_minimap)
+	{
+		m_minimap = new WorkspaceMinimap(workspace(), this);
+		addWindowedWidget(m_minimap);
+	}
+	toggleWindow(m_minimap);
+}
 
 
 
@@ -1668,7 +1688,8 @@ MainWindow::MovableQMdiArea::MovableQMdiArea(QWidget* parent) :
 	QMdiArea(parent),
 	m_isBeingMoved(false),
 	m_lastX(0),
-	m_lastY(0)
+	m_lastY(0),
+	m_zoomLevel(1.0f)
 {}
 
 void MainWindow::MovableQMdiArea::mousePressEvent(QMouseEvent* event)
@@ -1733,6 +1754,75 @@ void MainWindow::MovableQMdiArea::mouseReleaseEvent(QMouseEvent* event)
 {
 	setCursor(Qt::ArrowCursor);
 	m_isBeingMoved = false;
+}
+
+void MainWindow::MovableQMdiArea::wheelEvent(QWheelEvent* event)
+{
+	if (event->modifiers() & Qt::ControlModifier)
+	{
+		int numDegrees = event->angleDelta().y();
+		if (numDegrees != 0)
+		{
+			float factor = numDegrees > 0 ? 1.1f : 0.909f;
+			float newZoom = std::clamp(m_zoomLevel * factor, 0.4f, 2.5f);
+			if (std::abs(newZoom - m_zoomLevel) > 0.001f)
+			{
+				QPoint center = event->position().toPoint();
+				setZoomLevel(newZoom, center);
+			}
+			event->accept();
+			return;
+		}
+	}
+	QMdiArea::wheelEvent(event);
+}
+
+void MainWindow::MovableQMdiArea::mouseDoubleClickEvent(QMouseEvent* event)
+{
+	if (event->button() == Qt::LeftButton)
+	{
+		resetZoom();
+		event->accept();
+		return;
+	}
+	QMdiArea::mouseDoubleClickEvent(event);
+}
+
+void MainWindow::MovableQMdiArea::setZoomLevel(float newZoom, const QPoint& center)
+{
+	if (std::abs(newZoom - m_zoomLevel) < 0.001f) { return; }
+	float actualFactor = newZoom / m_zoomLevel;
+	m_zoomLevel = newZoom;
+
+	for (auto* curWindow : subWindowList())
+	{
+		if (curWindow && !curWindow->isMaximized())
+		{
+			int newX = center.x() + static_cast<int>((curWindow->x() - center.x()) * actualFactor);
+			int newY = center.y() + static_cast<int>((curWindow->y() - center.y()) * actualFactor);
+			int newW = std::max(120, static_cast<int>(curWindow->width() * actualFactor));
+			int newH = std::max(60, static_cast<int>(curWindow->height() * actualFactor));
+			curWindow->setGeometry(newX, newY, newW, newH);
+		}
+	}
+
+	TextFloat::displayMessage(
+		tr("Workspace Zoom"),
+		tr("Zoom: %1%").arg(static_cast<int>(std::round(m_zoomLevel * 100.0f))),
+		embed::getIconPixmap("zoom", 24, 24), 1000);
+}
+
+void MainWindow::MovableQMdiArea::resetZoom()
+{
+	if (std::abs(m_zoomLevel - 1.0f) > 0.01f)
+	{
+		QPoint center(width() / 2, height() / 2);
+		setZoomLevel(1.0f, center);
+		TextFloat::displayMessage(
+			tr("Workspace Zoom"),
+			tr("Zoom: 100% (Reset)"),
+			embed::getIconPixmap("zoom", 24, 24), 1500);
+	}
 }
 
 

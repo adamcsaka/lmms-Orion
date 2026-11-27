@@ -526,6 +526,7 @@ void SongEditor::keyPressEvent( QKeyEvent * ke )
 	else if( ke->key() == Qt::Key_Escape )
 	{
 		selectAllClips( false );
+		clearTrackSelection();
 	}
 	else if (ke->key() == Qt::Key_0 && ke->modifiers() & Qt::ControlModifier)
 	{

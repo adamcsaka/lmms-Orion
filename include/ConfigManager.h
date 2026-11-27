@@ -276,6 +276,12 @@ public:
 		setValue("ui", "applyprojectthemes", QString::number(enable ? 1 : 0));
 	}
 
+	// Maximum pattern length in bars (fractional values allowed) applied by
+	// PatternStore::lengthOfPattern(). Values <= 0 mean "unlimited" (still
+	// bounded internally by a hard safety cap). Shared by Song & Pattern Editor.
+	double patternLengthCap() const;
+	void setPatternLengthCap(double bars);
+
 	// Creates the working directory & subdirectories on disk.
 	void createWorkingDir();
 

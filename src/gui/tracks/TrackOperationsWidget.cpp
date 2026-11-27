@@ -26,11 +26,16 @@
 
 #include <QCheckBox>
 #include <QHBoxLayout>
+#include <QInputDialog>
+#include <QLineEdit>
+#include <QMap>
 #include <QMenu>
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPushButton>
+#include <QSet>
+#include <QVector>
 
 #include "AutomatableButton.h"
 #include "AutomationClip.h"
@@ -47,6 +52,7 @@
 #include "StringPairDrag.h"
 #include "TextFloat.h"
 #include "Track.h"
+#include "TrackContainer.h"
 #include "TrackContainerView.h"
 #include "TrackGrip.h"
 #include "TrackView.h"
@@ -245,6 +251,264 @@ void TrackOperationsWidget::resetClipColors()
 }
 
 
+// -- batch operations on the multi-track selection ---------------------
+
+void TrackOperationsWidget::cloneSelectedTracks()
+{
+	auto* tcv = m_trackView->trackContainerView();
+	const auto selected = tcv->selectedTrackViews();
+	if (selected.isEmpty()) { return; }
+
+	// Clone every selected track, then move the clones as a block right
+	// after the lowest selected track, preserving their order.
+	const int insertPos = tcv->trackViews().indexOf(selected.last()) + 1;
+	QVector<TrackView*> clones;
+	for (auto* tv : selected)
+	{
+		if (!tv || !tv->getTrack()) { continue; }
+		if (TrackView* newView = tcv->createTrackView(tv->getTrack()->clone()))
+		{
+			clones.append(newView);
+		}
+	}
+	int target = insertPos;
+	for (auto* clone : clones)
+	{
+		while (tcv->trackViews().indexOf(clone) > target)
+		{
+			tcv->moveTrackViewUp(clone);
+		}
+		++target;
+	}
+	Engine::getSong()->setModified();
+}
+
+void TrackOperationsWidget::removeSelectedTracks()
+{
+	auto* tcv = m_trackView->trackContainerView();
+	const auto selected = tcv->selectedTrackViews();
+	if (selected.isEmpty()) { return; }
+
+	const auto ret = QMessageBox::warning(this, tr("Remove tracks"),
+		tr("Remove %1 tracks including their clips?").arg(selected.size()),
+		QMessageBox::Ok | QMessageBox::Cancel, QMessageBox::Cancel);
+	if (ret != QMessageBox::Ok) { return; }
+
+	// Remove this widget's own track last (via the queued signal) so the
+	// menu stays valid while the other views are deleted.
+	for (auto* tv : selected)
+	{
+		if (tv && tv != m_trackView) { tcv->deleteTrackView(tv); }
+	}
+	if (selected.contains(m_trackView))
+	{
+		emit trackRemovalScheduled(m_trackView);
+	}
+}
+
+void TrackOperationsWidget::clearSelectedTracks()
+{
+	auto* tcv = m_trackView->trackContainerView();
+	const auto selected = tcv->selectedTrackViews();
+	if (selected.isEmpty() || tcv->fixedClips()) { return; }
+
+	tcv->model()->addJournalCheckPoint();
+	for (auto* tv : selected)
+	{
+		if (!tv) { continue; }
+		Track* t = tv->getTrack();
+		if (!t) { continue; }
+		t->lock();
+		t->deleteClips();
+		t->unlock();
+	}
+	Engine::getSong()->setModified();
+}
+
+void TrackOperationsWidget::moveSelectedTracksUp()
+{
+	auto* tcv = m_trackView->trackContainerView();
+	for (auto* tv : tcv->selectedTrackViews())
+	{
+		if (tv) { tcv->moveTrackViewUp(tv); }
+	}
+}
+
+void TrackOperationsWidget::moveSelectedTracksDown()
+{
+	auto* tcv = m_trackView->trackContainerView();
+	const auto selected = tcv->selectedTrackViews();
+	// Bottom-most first so selected neighbours don't overtake each other.
+	for (auto it = selected.crbegin(); it != selected.crend(); ++it)
+	{
+		if (*it) { tcv->moveTrackViewDown(*it); }
+	}
+}
+
+void TrackOperationsWidget::muteSelectedTracks()
+{
+	auto* tcv = m_trackView->trackContainerView();
+	for (auto* tv : tcv->selectedTrackViews())
+	{
+		if (tv && tv->getTrack()) { tv->getTrack()->setMuted(true); }
+	}
+}
+
+void TrackOperationsWidget::unmuteSelectedTracks()
+{
+	auto* tcv = m_trackView->trackContainerView();
+	for (auto* tv : tcv->selectedTrackViews())
+	{
+		if (tv && tv->getTrack()) { tv->getTrack()->setMuted(false); }
+	}
+}
+
+void TrackOperationsWidget::soloSelectedTracks()
+{
+	auto* tcv = m_trackView->trackContainerView();
+	const auto selected = tcv->selectedTrackViews();
+	if (selected.isEmpty()) { return; }
+
+	QSet<Track*> selTracks;
+	for (auto* tv : selected)
+	{
+		if (tv && tv->getTrack()) { selTracks.insert(tv->getTrack()); }
+	}
+	if (selTracks.isEmpty()) { return; }
+
+	// Mirrors Track::toggleSolo, applied to the whole selection at once.
+	const bool soloLegacy = ConfigManager::inst()->value("app", "sololegacybehavior", "0").toInt();
+	for (Track* t : tcv->model()->tracks())
+	{
+		if (selTracks.contains(t))
+		{
+			t->setSolo(true);
+			t->setMuted(false);
+		}
+		else
+		{
+			t->setSolo(false);
+			if (soloLegacy || t->type() != Track::Type::Automation)
+			{
+				t->setMuted(true);
+			}
+		}
+	}
+	Engine::getSong()->setModified();
+}
+
+void TrackOperationsWidget::selectColorForSelectedTracks()
+{
+	auto* tcv = m_trackView->trackContainerView();
+	const auto selected = tcv->selectedTrackViews();
+	if (selected.isEmpty()) { return; }
+
+	const auto newColor = ColorChooser{this}
+		.withPalette(ColorChooser::Palette::Track)
+		->getColor(m_trackView->getTrack()->color().value_or(Qt::white));
+
+	if (!newColor.isValid()) { return; }
+
+	tcv->model()->addJournalCheckPoint();
+	for (auto* tv : selected)
+	{
+		if (tv && tv->getTrack()) { tv->getTrack()->setColor(newColor); }
+	}
+	Engine::getSong()->setModified();
+}
+
+void TrackOperationsWidget::groupSelectedTracks()
+{
+	auto* tcv = m_trackView->trackContainerView();
+	const auto selected = tcv->selectedTrackViews();
+	if (selected.size() < 2) { return; }
+
+	const int gid = tcv->nextGroupId();
+	bool ok = false;
+	QString name = QInputDialog::getText(this, tr("Track group"),
+		tr("Group name:"), QLineEdit::Normal,
+		tr("Group %1").arg(gid), &ok);
+	if (!ok) { return; }
+
+	tcv->model()->addJournalCheckPoint();
+	for (auto* tv : selected)
+	{
+		if (tv && tv->getTrack()) { tv->getTrack()->setGroup(gid, name); }
+	}
+	Engine::getSong()->setModified();
+}
+
+void TrackOperationsWidget::ungroupSelectedTracks()
+{
+	auto* tcv = m_trackView->trackContainerView();
+	const auto selected = tcv->selectedTrackViews();
+	if (selected.isEmpty()) { return; }
+
+	tcv->model()->addJournalCheckPoint();
+	for (auto* tv : selected)
+	{
+		if (tv && tv->getTrack() && tv->getTrack()->groupId() > 0)
+		{
+			tv->getTrack()->setGroup(0);
+		}
+	}
+	Engine::getSong()->setModified();
+}
+
+void TrackOperationsWidget::addSelectedToGroup(int groupId)
+{
+	auto* tcv = m_trackView->trackContainerView();
+	const auto selected = tcv->selectedTrackViews();
+	if (selected.isEmpty() || groupId <= 0) { return; }
+
+	QString name;
+	for (const auto* t : tcv->model()->tracks())
+	{
+		if (t->groupId() == groupId) { name = t->groupName(); break; }
+	}
+
+	tcv->model()->addJournalCheckPoint();
+	for (auto* tv : selected)
+	{
+		if (tv && tv->getTrack() && tv->getTrack()->groupId() != groupId)
+		{
+			tv->getTrack()->setGroup(groupId, name);
+		}
+	}
+	Engine::getSong()->setModified();
+}
+
+void TrackOperationsWidget::renameSelectedGroup()
+{
+	auto* tcv = m_trackView->trackContainerView();
+	Track* self = m_trackView->getTrack();
+	const int gid = self ? self->groupId() : 0;
+	if (gid <= 0) { return; }
+
+	bool ok = false;
+	QString name = QInputDialog::getText(this, tr("Rename group"),
+		tr("Group name:"), QLineEdit::Normal,
+		self->groupName().isEmpty() ? tr("Group %1").arg(gid) : self->groupName(), &ok);
+	if (!ok) { return; }
+
+	tcv->model()->addJournalCheckPoint();
+	for (Track* t : tcv->model()->tracks())
+	{
+		if (t->groupId() == gid) { t->setGroup(gid, name); }
+	}
+	Engine::getSong()->setModified();
+}
+
+void TrackOperationsWidget::toggleSelectedGroupCollapsed()
+{
+	auto* tcv = m_trackView->trackContainerView();
+	Track* self = m_trackView->getTrack();
+	const int gid = self ? self->groupId() : 0;
+	if (gid <= 0) { return; }
+	tcv->setGroupCollapsed(gid, !tcv->isGroupCollapsed(gid));
+}
+
+
 void TrackOperationsWidget::updateMenu()
 {
 	QMenu * toMenu = m_trackOps->menu();
@@ -277,6 +541,59 @@ void TrackOperationsWidget::updateMenu()
 	{
 		toMenu->addAction( tr( "Turn all recording on" ), this, SLOT(recordingOn()));
 		toMenu->addAction( tr( "Turn all recording off" ), this, SLOT(recordingOff()));
+	}
+
+	// Batch operations when this track is part of a multi-track selection.
+	auto* tcv = m_trackView->trackContainerView();
+	const auto selectedViews = tcv->selectedTrackViews();
+	if (selectedViews.size() > 1 && selectedViews.contains(m_trackView))
+	{
+		toMenu->addSeparator();
+		QMenu* selMenu = toMenu->addMenu(tr("%1 tracks selected").arg(selectedViews.size()));
+
+		selMenu->addAction(tr("Clone selected tracks"), this, &TrackOperationsWidget::cloneSelectedTracks);
+		selMenu->addAction(tr("Remove selected tracks"), this, &TrackOperationsWidget::removeSelectedTracks);
+		if (!tcv->fixedClips())
+		{
+			selMenu->addAction(tr("Clear selected tracks"), this, &TrackOperationsWidget::clearSelectedTracks);
+		}
+		selMenu->addSeparator();
+		selMenu->addAction(tr("Move selected up"), this, &TrackOperationsWidget::moveSelectedTracksUp);
+		selMenu->addAction(tr("Move selected down"), this, &TrackOperationsWidget::moveSelectedTracksDown);
+		selMenu->addSeparator();
+		selMenu->addAction(tr("Mute selected"), this, &TrackOperationsWidget::muteSelectedTracks);
+		selMenu->addAction(tr("Unmute selected"), this, &TrackOperationsWidget::unmuteSelectedTracks);
+		selMenu->addAction(tr("Solo selected"), this, &TrackOperationsWidget::soloSelectedTracks);
+		selMenu->addAction(tr("Set color for selected..."), this, &TrackOperationsWidget::selectColorForSelectedTracks);
+		selMenu->addSeparator();
+
+		QMenu* groupMenu = selMenu->addMenu(tr("Track group"));
+		groupMenu->addAction(tr("Group selected tracks"), this, &TrackOperationsWidget::groupSelectedTracks);
+		groupMenu->addAction(tr("Ungroup selected"), this, &TrackOperationsWidget::ungroupSelectedTracks);
+
+		QMap<int, QString> existingGroups;
+		for (const auto* t : tcv->model()->tracks())
+		{
+			if (t->groupId() > 0) { existingGroups[t->groupId()] = t->groupName(); }
+		}
+		if (!existingGroups.isEmpty())
+		{
+			QMenu* addToMenu = groupMenu->addMenu(tr("Add to group"));
+			for (auto it = existingGroups.constBegin(); it != existingGroups.constEnd(); ++it)
+			{
+				const QString label = it.value().isEmpty() ? tr("Group %1").arg(it.key()) : it.value();
+				addToMenu->addAction(label, this, [this, gid = it.key()] { addSelectedToGroup(gid); });
+			}
+		}
+
+		const int ownGroup = m_trackView->getTrack()->groupId();
+		if (ownGroup > 0)
+		{
+			groupMenu->addSeparator();
+			groupMenu->addAction(tr("Rename group..."), this, &TrackOperationsWidget::renameSelectedGroup);
+			groupMenu->addAction(tcv->isGroupCollapsed(ownGroup) ? tr("Expand group") : tr("Collapse group"),
+								 this, &TrackOperationsWidget::toggleSelectedGroupCollapsed);
+		}
 	}
 
 	toMenu->addSeparator();

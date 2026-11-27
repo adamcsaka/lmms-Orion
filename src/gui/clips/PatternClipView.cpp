@@ -24,6 +24,9 @@
 
 #include "PatternClipView.h"
 
+#include <algorithm>
+#include <limits>
+
 #include <QApplication>
 #include <QDomDocument>
 #include <QMenu>
@@ -126,8 +129,10 @@ void PatternClipView::paintEvent(QPaintEvent*)
 	// paint a black rectangle under the clip to prevent glitches with transparent backgrounds
 	p.fillRect( rect(), QColor( 0, 0, 0 ) );
 
-	const int pixelsPerPattern = Engine::patternStore()->lengthOfPattern(m_patternClip->patternIndex()) * pixelsPerBar();
-	int offset = static_cast<int>(m_patternClip->startTimeOffset() * (pixelsPerBar() / TimePos::ticksPerBar()))
+	// 64-bit: with configurable/unlimited pattern lengths the strip width can
+	// exceed the int range.
+	const qint64 pixelsPerPattern = static_cast<qint64>(static_cast<double>(Engine::patternStore()->lengthOfPattern(m_patternClip->patternIndex())) * pixelsPerBar());
+	qint64 offset = static_cast<qint64>(static_cast<double>(m_patternClip->startTimeOffset()) * (pixelsPerBar() / TimePos::ticksPerBar()))
 			% pixelsPerPattern;
 	if (offset < 2) {
 		offset += pixelsPerPattern;
@@ -174,13 +179,25 @@ void PatternClipView::paintEvent(QPaintEvent*)
 	const int horizontalNoteSpacing = pixelsPerBar() / TimePos::stepsPerBar() * m_noteHorizontalSpacing;
 
 	// This pixmap is a batching optimization which draws notes into one vertical strip for tiling patterns.
-	QPixmap midiPatternPixmap(pixelsPerPattern, m_paintPixmap.height());
-	midiPatternPixmap.fill(Qt::transparent);
+	// For very long patterns the strip would be too large to allocate, so notes
+	// are drawn directly for every visible repetition instead.
+	constexpr qint64 maxPatternStripWidth = 65536;
+	const bool useStripPixmap = pixelsPerPattern > 0 && pixelsPerPattern <= maxPatternStripWidth;
 
-	QPainter pixPainter(&midiPatternPixmap);
-	pixPainter.setPen(Qt::NoPen);
+	QPixmap midiPatternPixmap;
+	QPainter stripPainter;
+	QPainter* notePainter = &p;
+	if (useStripPixmap)
+	{
+		midiPatternPixmap = QPixmap(static_cast<int>(pixelsPerPattern), m_paintPixmap.height());
+		midiPatternPixmap.fill(Qt::transparent);
+		stripPainter.begin(&midiPatternPixmap);
+		notePainter = &stripPainter;
+	}
+
+	notePainter->setPen(Qt::NoPen);
 	const auto noteColor = QColor(m_noteColor.red(), m_noteColor.green(), m_noteColor.blue());
-	pixPainter.setBrush(QBrush(noteColor));
+	notePainter->setBrush(QBrush(noteColor));
 
 	TimePos longestLength(1);
 	float lastY = height() * m_verticalPadding;
@@ -196,22 +213,53 @@ void PatternClipView::paintEvent(QPaintEvent*)
 		longestLength = std::max(longestLength, mClip->length());
 		for (const Note* note : mClip->notes())
 		{
-			QRect noteRect = QRect(
-				note->pos() * pixelsPerBar() / TimePos::ticksPerBar(),
+			const qint64 noteX = static_cast<qint64>(note->pos().getTicks()) * static_cast<double>(pixelsPerBar()) / TimePos::ticksPerBar();
+			const QRect noteRect = QRect(
+				static_cast<int>(useStripPixmap ? std::min<qint64>(noteX, pixelsPerPattern) : 0),
 				lastY + verticalNoteSpacing / 2,
 				std::max(1.0f, pixelsPerBar() / TimePos::stepsPerBar() - horizontalNoteSpacing),
 				std::max(1.0f, trackHeight - verticalNoteSpacing)
 			);
-			pixPainter.setOpacity(std::clamp(note->getVolume() / 100.0, 0.2, 1.0));
-			pixPainter.drawRect(noteRect);
+			const double noteOpacity = std::clamp(note->getVolume() / 100.0, 0.2, 1.0);
+			if (useStripPixmap)
+			{
+				notePainter->setOpacity(noteOpacity);
+				notePainter->drawRect(noteRect);
+			}
+			else
+			{
+				// Draw the note once per visible repetition of the pattern period.
+				// Screen x positions are offset + hns/2 + noteX (mod pixelsPerPattern),
+				// matching the tiled-pixmap path below.
+				qint64 x = (offset + horizontalNoteSpacing / 2 + noteX) % pixelsPerPattern;
+				p.setOpacity(noteOpacity);
+				for (x -= pixelsPerPattern; x < width(); x += pixelsPerPattern)
+				{
+					if (x + noteRect.width() > 0)
+					{
+						p.drawRect(QRect(static_cast<int>(x), noteRect.y(), noteRect.width(), noteRect.height()));
+					}
+				}
+			}
 		}
 
 		lastY += trackHeight;
 	}
 
-	// Compare how long the longest clip view is compared to the underlying pattern. First +1 for ceiling, second +1 for possible previous bar.
-	const int maxPossibleRepetitions = getClip()->length() / longestLength + 1 + 1;
-	p.drawTiledPixmap(offset + horizontalNoteSpacing / 2 - pixelsPerPattern, 0, width() + (maxPossibleRepetitions - 1) * pixelsPerPattern, height(), midiPatternPixmap);
+	p.setOpacity(1.0);
+
+	if (useStripPixmap)
+	{
+		stripPainter.end();
+
+		// Compare how long the longest clip view is compared to the underlying pattern. First +1 for ceiling, second +1 for possible previous bar.
+		const int maxPossibleRepetitions = getClip()->length() / longestLength + 1 + 1;
+		const qint64 tiledWidth = static_cast<qint64>(width()) + (maxPossibleRepetitions - 1) * pixelsPerPattern;
+		p.drawTiledPixmap(
+			static_cast<int>(offset + horizontalNoteSpacing / 2 - pixelsPerPattern), 0,
+			static_cast<int>(std::min<qint64>(tiledWidth, std::numeric_limits<int>::max())), height(),
+			midiPatternPixmap);
+	}
 	
 	// bar lines
 	const int lineSize = 3;
@@ -220,11 +268,12 @@ void PatternClipView::paintEvent(QPaintEvent*)
 
 	if (pixelsPerPattern > 0)
 	{
-		for (int x = offset; x < width() - 2; x += pixelsPerPattern)
+		for (qint64 x = offset; x < width() - 2; x += pixelsPerPattern)
 		{
-			p.drawLine( x, BORDER_WIDTH, x, BORDER_WIDTH + lineSize );
-			p.drawLine( x, rect().bottom() - ( BORDER_WIDTH + lineSize ),
-			 	x, rect().bottom() - BORDER_WIDTH );
+			const int xi = static_cast<int>(x);
+			p.drawLine( xi, BORDER_WIDTH, xi, BORDER_WIDTH + lineSize );
+			p.drawLine( xi, rect().bottom() - ( BORDER_WIDTH + lineSize ),
+			 	xi, rect().bottom() - BORDER_WIDTH );
 		}
 	}
 

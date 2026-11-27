@@ -196,6 +196,14 @@ protected:
 
 private:
 	void resizeToHeight(int height);
+	void updateSelectionOverlay();
+
+	// Pending shift+click track-range selection: if the press turns into a
+	// drag it becomes the regular track-resize gesture instead.
+	enum class PendingSelection { None, Range };
+	PendingSelection m_pendingSelection = PendingSelection::None;
+	QPoint m_pressPos;
+	QWidget* m_selectionOverlay = nullptr;
 
 private:
 	enum class Action

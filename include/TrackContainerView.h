@@ -25,6 +25,7 @@
 #ifndef LMMS_GUI_TRACK_CONTAINER_VIEW_H
 #define LMMS_GUI_TRACK_CONTAINER_VIEW_H
 
+#include <QSet>
 #include <QVector>
 #include <QScrollArea>
 #include <QWidget>
@@ -140,6 +141,23 @@ public:
 	void removeTrackView( TrackView * _tv );
 	// -------------------------------------------------------
 
+	// -- multi track selection ---------------------------------
+	bool isTrackViewSelected(const TrackView* tv) const;
+	void setTrackViewSelected(TrackView* tv, bool selected);
+	void selectOnlyTrackView(TrackView* tv);
+	void selectTrackViewRange(TrackView* from, TrackView* to);
+	QList<TrackView*> selectedTrackViews() const;
+	void clearTrackSelection();
+	bool hasTrackSelection() const { return !m_selectedTrackViews.isEmpty(); }
+	int selectionAnchor() const { return m_selectionAnchor; }
+	void setSelectionAnchor(int index) { m_selectionAnchor = index; }
+
+	// -- track groups ------------------------------------------
+	int nextGroupId() const;
+	bool isGroupCollapsed(int groupId) const;
+	void setGroupCollapsed(int groupId, bool collapsed);
+	bool isTrackViewCollapsed(const TrackView* tv) const;
+
 	void clearAllTracks();
 
 	QString nodeName() const override
@@ -198,9 +216,14 @@ private:
 
 	RubberBand * m_rubberBand;
 
+	QSet<TrackView*> m_selectedTrackViews;
+	int m_selectionAnchor = -1;
+	QSet<int> m_collapsedGroups;
+
 signals:
 	void positionChanged( const lmms::TimePos & _pos );
 	void tracksRealigned();
+	void trackSelectionChanged();
 
 
 } ;

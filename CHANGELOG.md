@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v9.0.0] - Unreleased
+
+> Development line branched from **v8-original** (`87949a18e`). Implements guide section 9: configurable pattern-length cap, multi-track selection/groups, and the workspace minimap port.
+
+### Added
+- **Configurable Pattern Length Cap (guide 9.2):** The hard-coded 32-bar LCM clamp in `PatternStore::lengthOfPattern()` is now driven by the shared `patterns/lengthcap` config key (bars, fractional values allowed). Non-positive values mean "unlimited", internally bounded by a hard safety cap (~5.2e5 bars) so pathological clip-length combinations cannot exhaust memory. The LCM accumulator was widened to 64-bit so huge/unlimited combinations cannot overflow `tick_t` before the cap check. New "Pattern length limit..." toolbar action in the Pattern Editor opens a dialog with an Unlimited checkbox and a bars spinbox; applies to both Pattern and Song Editor, and forces clip-view repaints on change.
+- **64-bit-safe pattern strip rendering:** `PatternClipView::paintEvent()` now computes `pixelsPerPattern` in `qint64` and draws notes directly per visible repetition when the pattern strip would exceed 65536 px, preventing allocation failures and integer overflow for very long patterns.
+- **Multi-Track Selection (guide 9.1):** Click a track head to select it, Ctrl+click toggles tracks, Shift+click range-selects from the anchor (a drag still performs the legacy track-height resize). Works in both Song and Pattern Editors via the shared `TrackView`/`TrackContainerView` code. Selection is shown with a translucent accent overlay and a colored left bar; Escape clears it.
+- **Batch Track Operations:** The track operations (grip) menu gains a "N tracks selected" submenu when multiple tracks are selected: clone/remove/clear selected tracks, move up/down, mute/unmute/solo, and set a shared track color.
+- **Track Groups (guide 9.1):** Selected tracks can be grouped (with optional name), added to an existing group, ungrouped, renamed, and collapsed/expanded. Group membership (`trackgroup`/`trackgroupname` attributes) persists in project files and presets. Grouped tracks show a stable per-group tint; collapsing keeps the first member visible as the group header.
+- **Workspace Radar & Minimap + Workspace Zoom (guide 9.3):** Ported from the v8 `master` line (commit `1c5935b0e`). New "Workspace Radar & Minimap" window (Ctrl+9 / toolbar button) renders a live minimap of all MDI subwindows with click-drag panning and theme-aware colors. The workspace MDI area additionally supports Ctrl+wheel zoom (40%–250%, zoom-to-cursor) and double-click reset to 100%.
+
+### Build & Packaging
+- **`build-local.ps1`:** Added `-DWANT_SWH=OFF` to the CMake configure flags (the swh LADSPA pack cannot build on this machine — its Perl `List::MoreUtils`/`XML::Parser` modules are unavailable), matching the existing local build configuration.
+
+---
+
 ## [v8.0.0-original] - 2026-11-27
 
 > Continuation line branched from **v7.0.0** (`02626bedb`) plus the safe GUI-only theme commits (`8f248f074`, `4f3c18286`). The unstable v8 engine experiments (minimap, polyphony rework, arp DSP, cent detune) are intentionally excluded.

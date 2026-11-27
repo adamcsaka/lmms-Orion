@@ -98,6 +98,19 @@ TrackView::TrackView(Track* track, TrackContainerView* tcv)
 	connect(trackGrip, &TrackGrip::grabbed, this, &TrackView::onTrackGripGrabbed);
 	connect(trackGrip, &TrackGrip::released, this, &TrackView::onTrackGripReleased);
 
+	// Translucent overlay drawn on top of the whole track row to visualize
+	// multi-track selection and group membership. Transparent for mouse events.
+	m_selectionOverlay = new QWidget(this);
+	m_selectionOverlay->setAttribute(Qt::WA_TransparentForMouseEvents);
+	m_selectionOverlay->hide();
+
+	connect(m_trackContainerView, &TrackContainerView::trackSelectionChanged,
+			this, [this]() { updateSelectionOverlay(); });
+	connect(m_track, &Track::groupChanged,
+			this, [this]() { updateSelectionOverlay(); });
+	connect(m_track, &Track::colorChanged,
+			this, [this]() { updateSelectionOverlay(); });
+
 	// create views for already existing clips
 	for (const auto& clip : m_track->m_clips)
 	{
@@ -105,6 +118,7 @@ TrackView::TrackView(Track* track, TrackContainerView* tcv)
 	}
 
 	m_trackContainerView->addTrackView( this );
+	updateSelectionOverlay();
 }
 
 
@@ -125,6 +139,12 @@ void TrackView::resizeEvent( QResizeEvent * re )
 	}
 
 	m_trackContentWidget.setFixedHeight( height() );
+
+	if (m_selectionOverlay)
+	{
+		m_selectionOverlay->setGeometry(rect());
+		m_selectionOverlay->raise();
+	}
 }
 
 
@@ -222,6 +242,36 @@ void TrackView::mousePressEvent( QMouseEvent * me )
 							"compacttrackbuttons" ).toInt()==1 ?
 		DEFAULT_SETTINGS_WIDGET_WIDTH_COMPACT + TRACK_OP_WIDTH_COMPACT :
 		DEFAULT_SETTINGS_WIDGET_WIDTH + TRACK_OP_WIDTH;
+
+	// Multi-track selection: clicks on the track head area.
+	if (me->button() == Qt::LeftButton && pos.x() <= widgetTotal)
+	{
+		m_pressPos = me->pos();
+		const auto mods = me->modifiers();
+		if (mods & Qt::ControlModifier)
+		{
+			const bool wasSelected = m_trackContainerView->isTrackViewSelected(this);
+			m_trackContainerView->setTrackViewSelected(this, !wasSelected);
+			if (!wasSelected && m_trackContainerView->selectionAnchor() < 0)
+			{
+				m_trackContainerView->setSelectionAnchor(m_trackContainerView->trackViews().indexOf(this));
+			}
+			me->accept();
+			return;
+		}
+		if (mods & Qt::ShiftModifier)
+		{
+			// Defer: a drag keeps the legacy track-resize gesture,
+			// a plain click performs a range selection.
+			m_pendingSelection = PendingSelection::Range;
+			me->accept();
+			return;
+		}
+		m_trackContainerView->selectOnlyTrackView(this);
+		me->accept();
+		return;
+	}
+
 	if (m_trackContainerView->allowRubberband() == true  && pos.x() > widgetTotal)
 	{
 		QWidget::mousePressEvent( me );
@@ -249,6 +299,16 @@ void TrackView::mousePressEvent( QMouseEvent * me )
 void TrackView::mouseMoveEvent( QMouseEvent * me )
 {
 	const auto pos = position(me);
+
+	if (m_pendingSelection == PendingSelection::Range &&
+		(me->pos() - m_pressPos).manhattanLength() > 4)
+	{
+		// The shift+press became a drag: fall back to track resizing.
+		m_pendingSelection = PendingSelection::None;
+		m_action = Action::Resize;
+		QCursor::setPos(mapToGlobal(QPoint(pos.x(), height())));
+		QApplication::setOverrideCursor(Qt::SizeVerCursor);
+	}
 
 	int widgetTotal = ConfigManager::inst()->value( "ui",
 							"compacttrackbuttons" ).toInt()==1 ?
@@ -297,6 +357,21 @@ void TrackView::mouseMoveEvent( QMouseEvent * me )
 
 void TrackView::mouseReleaseEvent( QMouseEvent * me )
 {
+	if (m_pendingSelection == PendingSelection::Range)
+	{
+		m_pendingSelection = PendingSelection::None;
+		const int anchorIdx = m_trackContainerView->selectionAnchor();
+		const auto& views = m_trackContainerView->trackViews();
+		TrackView* anchor = (anchorIdx >= 0 && anchorIdx < views.size()) ? views[anchorIdx] : nullptr;
+		if (anchor && anchor != this)
+		{
+			m_trackContainerView->selectTrackViewRange(anchor, this);
+		}
+		else
+		{
+			m_trackContainerView->selectOnlyTrackView(this);
+		}
+	}
 	m_action = Action::None;
 	while( QApplication::overrideCursor() != nullptr )
 	{
@@ -383,6 +458,37 @@ void TrackView::resizeToHeight(int h)
 	setFixedHeight(qMax<int>(h, MINIMAL_TRACK_HEIGHT));
 	m_trackContainerView->realignTracks();
 	m_track->setHeight(height());
+}
+
+
+void TrackView::updateSelectionOverlay()
+{
+	if (!m_selectionOverlay) { return; }
+
+	if (m_trackContainerView->isTrackViewSelected(this))
+	{
+		m_selectionOverlay->setStyleSheet(QStringLiteral(
+			"background-color: rgba(64, 140, 220, 40);"
+			"border-left: 4px solid rgb(64, 140, 220);"));
+	}
+	else if (m_track->groupId() > 0)
+	{
+		// Stable tint per group id.
+		const QColor gc = QColor::fromHsv((m_track->groupId() * 47) % 360, 140, 220);
+		m_selectionOverlay->setStyleSheet(QStringLiteral(
+			"background-color: rgba(%1, %2, %3, 26);"
+			"border-left: 4px solid rgb(%1, %2, %3);")
+				.arg(gc.red()).arg(gc.green()).arg(gc.blue()));
+	}
+	else
+	{
+		m_selectionOverlay->hide();
+		return;
+	}
+
+	m_selectionOverlay->setGeometry(rect());
+	m_selectionOverlay->show();
+	m_selectionOverlay->raise();
 }
 
 

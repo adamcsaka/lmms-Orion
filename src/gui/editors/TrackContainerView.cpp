@@ -175,6 +175,18 @@ void TrackContainerView::removeTrackView( TrackView * _tv )
 	int index = m_trackViews.indexOf( _tv );
 	if( index != -1 )
 	{
+		if( m_selectedTrackViews.remove( _tv ) > 0 || m_selectionAnchor == index )
+		{
+			emit trackSelectionChanged();
+		}
+		if( m_selectionAnchor == index )
+		{
+			m_selectionAnchor = -1;
+		}
+		else if( m_selectionAnchor > index )
+		{
+			--m_selectionAnchor;
+		}
 		m_trackViews.removeAt( index );
 
 		disconnect(_tv->getTrackContentWidget());
@@ -263,7 +275,7 @@ void TrackContainerView::realignTracks()
 {
 	for (const auto& trackView : m_trackViews)
 	{
-		trackView->show();
+		trackView->setVisible(!isTrackViewCollapsed(trackView));
 		trackView->update();
 	}
 
@@ -315,6 +327,7 @@ const TrackView * TrackContainerView::trackViewAt( const int _y ) const
 
 	for (const auto& trackView : m_trackViews)
 	{
+		if (isTrackViewCollapsed(trackView)) { continue; }
 		const int y_cnt1 = y_cnt;
 		y_cnt += trackView->height();
 		if (abs_y >= y_cnt1 && abs_y < y_cnt) { return trackView; }
@@ -357,6 +370,8 @@ void TrackContainerView::setPixelsPerBar( int ppb )
 
 void TrackContainerView::clearAllTracks()
 {
+	m_selectedTrackViews.clear();
+	m_selectionAnchor = -1;
 	while( !m_trackViews.empty() )
 	{
 		TrackView * tv = m_trackViews.takeLast();
@@ -503,9 +518,128 @@ unsigned int TrackContainerView::totalHeightOfTracks() const
 	unsigned int heightSum = 0;
 	for (auto & trackView : m_trackViews)
 	{
+		if (isTrackViewCollapsed(trackView)) { continue; }
 		heightSum += trackView->getTrack()->getHeight();
 	}
 	return heightSum;
+}
+
+
+// -- multi track selection -------------------------------------
+
+bool TrackContainerView::isTrackViewSelected(const TrackView* tv) const
+{
+	return tv && m_selectedTrackViews.contains(const_cast<TrackView*>(tv));
+}
+
+void TrackContainerView::setTrackViewSelected(TrackView* tv, bool selected)
+{
+	if (!tv || !m_trackViews.contains(tv)) { return; }
+	if (selected)
+	{
+		m_selectedTrackViews.insert(tv);
+	}
+	else
+	{
+		m_selectedTrackViews.remove(tv);
+	}
+	emit trackSelectionChanged();
+}
+
+void TrackContainerView::selectOnlyTrackView(TrackView* tv)
+{
+	const auto previous = m_selectedTrackViews;
+	m_selectedTrackViews.clear();
+	m_selectionAnchor = -1;
+	if (tv && m_trackViews.contains(tv))
+	{
+		m_selectedTrackViews.insert(tv);
+		m_selectionAnchor = m_trackViews.indexOf(tv);
+	}
+	if (previous != m_selectedTrackViews)
+	{
+		emit trackSelectionChanged();
+	}
+}
+
+void TrackContainerView::selectTrackViewRange(TrackView* from, TrackView* to)
+{
+	const int i1 = m_trackViews.indexOf(from);
+	const int i2 = m_trackViews.indexOf(to);
+	if (i1 < 0 || i2 < 0) { return; }
+
+	const int lo = std::min(i1, i2);
+	const int hi = std::max(i1, i2);
+	m_selectedTrackViews.clear();
+	for (int i = lo; i <= hi; ++i)
+	{
+		m_selectedTrackViews.insert(m_trackViews[i]);
+	}
+	emit trackSelectionChanged();
+}
+
+QList<TrackView*> TrackContainerView::selectedTrackViews() const
+{
+	QList<TrackView*> out;
+	for (auto* tv : m_trackViews)
+	{
+		if (m_selectedTrackViews.contains(tv)) { out.append(tv); }
+	}
+	return out;
+}
+
+void TrackContainerView::clearTrackSelection()
+{
+	if (m_selectedTrackViews.isEmpty() && m_selectionAnchor < 0) { return; }
+	m_selectedTrackViews.clear();
+	m_selectionAnchor = -1;
+	emit trackSelectionChanged();
+}
+
+// -- track groups ----------------------------------------------
+
+int TrackContainerView::nextGroupId() const
+{
+	int maxId = 0;
+	for (const auto* t : m_tc->tracks())
+	{
+		maxId = std::max(maxId, t->groupId());
+	}
+	return maxId + 1;
+}
+
+bool TrackContainerView::isGroupCollapsed(int groupId) const
+{
+	return groupId > 0 && m_collapsedGroups.contains(groupId);
+}
+
+void TrackContainerView::setGroupCollapsed(int groupId, bool collapsed)
+{
+	if (groupId <= 0) { return; }
+	if (collapsed)
+	{
+		m_collapsedGroups.insert(groupId);
+	}
+	else
+	{
+		m_collapsedGroups.remove(groupId);
+	}
+	realignTracks();
+}
+
+bool TrackContainerView::isTrackViewCollapsed(const TrackView* tv) const
+{
+	const int gid = tv->getTrack()->groupId();
+	if (!isGroupCollapsed(gid)) { return false; }
+	// Keep the first member of the group visible as the collapse header.
+	for (const auto* v : m_trackViews)
+	{
+		if (v->getTrack()->groupId() == gid)
+		{
+			return v != tv;
+		}
+	}
+	return false;
 }
 
 } // namespace gui

@@ -26,14 +26,21 @@
 
 #include <QAction>
 #include <QActionGroup>
+#include <QCheckBox>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QDoubleSpinBox>
 #include <QToolButton>
 #include <QVBoxLayout>
 
 #include "RandomInstrumentationDialog.h"
 #include "ClipView.h"
 #include "ComboBox.h"
+#include "ConfigManager.h"
 #include "DataFile.h"
 #include "GuiApplication.h"
+#include "SongEditor.h"
+#include "TrackContentWidget.h"
 #include "embed.h"
 #include "MainWindow.h"
 #include "PatternStore.h"
@@ -375,6 +382,60 @@ PatternEditorWindow::PatternEditorWindow(PatternStore* ps) :
 		if (getGUI() && getGUI()->mainWindow())
 		{
 			getGUI()->mainWindow()->exportPattern();
+		}
+	});
+
+	auto patternLenAction = trackAndStepActionsToolBar->addAction(
+		embed::getIconPixmap("max_length"), tr("Pattern length limit..."));
+	patternLenAction->setToolTip(tr("Set the maximum pattern length (LCM of clip lengths). Applies to both Pattern and Song Editor."));
+	connect(patternLenAction, &QAction::triggered, [this]() {
+		QDialog lengthDialog(this);
+		lengthDialog.setWindowTitle(tr("Pattern length limit"));
+		lengthDialog.setModal(true);
+
+		auto* dialogLayout = new QVBoxLayout(&lengthDialog);
+
+		const double currentCap = ConfigManager::inst()->patternLengthCap();
+		const bool isUnlimited = currentCap <= 0.0;
+
+		auto* unlimitedCheck = new QCheckBox(tr("Unlimited"), &lengthDialog);
+		unlimitedCheck->setChecked(isUnlimited);
+		unlimitedCheck->setToolTip(tr("No user-defined cap (bounded internally for safety)"));
+
+		auto* barsSpin = new QDoubleSpinBox(&lengthDialog);
+		barsSpin->setRange(0.1, 1000000.0);
+		barsSpin->setDecimals(2);
+		barsSpin->setSingleStep(0.5);
+		barsSpin->setValue(isUnlimited ? 32.0 : currentCap);
+		barsSpin->setSuffix(tr(" bars"));
+		barsSpin->setEnabled(!isUnlimited);
+		connect(unlimitedCheck, &QCheckBox::toggled, barsSpin, &QDoubleSpinBox::setEnabled);
+
+		dialogLayout->addWidget(unlimitedCheck);
+		dialogLayout->addWidget(barsSpin);
+
+		auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &lengthDialog);
+		dialogLayout->addWidget(buttons);
+		connect(buttons, &QDialogButtonBox::accepted, &lengthDialog, &QDialog::accept);
+		connect(buttons, &QDialogButtonBox::rejected, &lengthDialog, &QDialog::reject);
+
+		if (lengthDialog.exec() == QDialog::Accepted)
+		{
+			ConfigManager::inst()->setPatternLengthCap(unlimitedCheck->isChecked() ? 0.0 : barsSpin->value());
+			m_editor->updateMaxSteps();
+
+			// Pattern clip views in the Song Editor cache their rendered
+			// pattern strip, so force a repaint of all clip views there too.
+			if (auto* se = getGUI() ? getGUI()->songEditor() : nullptr)
+			{
+				for (auto* tv : se->m_editor->trackViews())
+				{
+					if (auto* tcw = tv->getTrackContentWidget())
+					{
+						tcw->update();
+					}
+				}
+			}
 		}
 	});
 

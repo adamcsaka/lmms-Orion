@@ -82,6 +82,22 @@ private slots:
 	void recordingOff();
 	void clearTrack(); //!< Clears all Clips from the track
 
+	// Batch operations on the multi-track selection (TrackContainerView)
+	void cloneSelectedTracks();
+	void removeSelectedTracks();
+	void clearSelectedTracks();
+	void moveSelectedTracksUp();
+	void moveSelectedTracksDown();
+	void muteSelectedTracks();
+	void unmuteSelectedTracks();
+	void soloSelectedTracks();
+	void selectColorForSelectedTracks();
+	void groupSelectedTracks();
+	void ungroupSelectedTracks();
+	void addSelectedToGroup(int groupId);
+	void renameSelectedGroup();
+	void toggleSelectedGroupCollapsed();
+
 private:
 	TrackView * m_trackView;
 

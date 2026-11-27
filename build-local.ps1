@@ -43,7 +43,7 @@ if (-not (Test-Path "$repoDir\build")) {
 
 # 4. Configure with CMake
 Write-Host "=== Configuring CMake with Ninja & vcpkg ===" -ForegroundColor Cyan
-& cmd /c "`"$vcvars`" && cmake -S `"$repoDir`" -B `"$repoDir\build`" -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTARGET_UARCH=official -DWANT_QT6=ON -DUSE_COMPILE_CACHE=OFF -DUSE_WERROR=OFF -DCMAKE_PREFIX_PATH=`"$qtDir`" -DGIT_EXECUTABLE=`"C:/lmms/git/cmd/git.exe`" --toolchain `"$vcpkgToolchain`" -DVCPKG_TARGET_TRIPLET=x64-windows -DVCPKG_HOST_TRIPLET=x64-windows"
+& cmd /c "`"$vcvars`" && cmake -S `"$repoDir`" -B `"$repoDir\build`" -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTARGET_UARCH=official -DWANT_QT6=ON -DUSE_COMPILE_CACHE=OFF -DUSE_WERROR=OFF -DWANT_SWH=OFF -DCMAKE_PREFIX_PATH=`"$qtDir`" -DGIT_EXECUTABLE=`"C:/lmms/git/cmd/git.exe`" --toolchain `"$vcpkgToolchain`" -DVCPKG_TARGET_TRIPLET=x64-windows -DVCPKG_HOST_TRIPLET=x64-windows"
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "CMake configuration failed with exit code $LASTEXITCODE"

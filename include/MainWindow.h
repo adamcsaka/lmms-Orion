@@ -46,6 +46,7 @@ namespace gui
 class PluginView;
 class SubWindow;
 class ToolButton;
+class WorkspaceMinimap;
 
 
 class MainWindow : public QMainWindow
@@ -165,6 +166,7 @@ public slots:
 	void toggleMicrotunerWin();
 	void toggleMixerWin();
 	void togglePianoRollWin();
+	void toggleMinimapWin();
 	void toggleControllerRack();
 	void toggleFullscreen();
 
@@ -205,18 +207,28 @@ private:
 	{
 	public:
 		MovableQMdiArea(QWidget* parent = nullptr);
-		~MovableQMdiArea() {}
+		~MovableQMdiArea() override {}
+
+		float zoomLevel() const { return m_zoomLevel; }
+		void setZoomLevel(float level, const QPoint& center);
+		void resetZoom();
+
 	protected:
 		void mousePressEvent(QMouseEvent* event) override;
 		void mouseMoveEvent(QMouseEvent* event) override;
 		void mouseReleaseEvent(QMouseEvent* event) override;
+		void mouseDoubleClickEvent(QMouseEvent* event) override;
+		void wheelEvent(QWheelEvent* event) override;
+
 	private:
 		bool m_isBeingMoved;
 		int m_lastX;
 		int m_lastY;
+		float m_zoomLevel;
 	};
 
 	MovableQMdiArea * m_workspace;
+	WorkspaceMinimap * m_minimap;
 
 	QWidget * m_toolBar;
 	QGridLayout * m_toolBarLayout;

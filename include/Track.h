@@ -257,6 +257,12 @@ public:
 	auto color() const -> const std::optional<QColor>& { return m_color; }
 	void setColor(const std::optional<QColor>& color);
 
+	// Track group: id 0 means "no group". groupName is shared by all members
+	// (an empty name falls back to a generated "Group N" label in the GUI).
+	int groupId() const { return m_group; }
+	const QString& groupName() const { return m_groupName; }
+	void setGroup(int id, const QString& name = QString());
+
 	bool isMutedBeforeSolo() const
 	{
 		return m_mutedBeforeSolo;
@@ -322,6 +328,9 @@ private:
 	
 	std::optional<QColor> m_color;
 
+	int m_group = 0;
+	QString m_groupName;
+
 	friend class gui::TrackView;
 
 
@@ -330,6 +339,7 @@ signals:
 	void nameChanged();
 	void clipAdded( lmms::Clip * );
 	void colorChanged();
+	void groupChanged();
 } ;
 
 

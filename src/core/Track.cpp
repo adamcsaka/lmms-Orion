@@ -185,7 +185,16 @@ void Track::saveTrack(QDomDocument& doc, QDomElement& element, bool presetMode)
 	{
 		element.setAttribute("color", m_color->name());
 	}
-	
+
+	if (m_group > 0)
+	{
+		element.setAttribute("trackgroup", m_group);
+		if (!m_groupName.isEmpty())
+		{
+			element.setAttribute("trackgroupname", m_groupName);
+		}
+	}
+
 	QDomElement tsDe = doc.createElement( nodeName() );
 	// let actual track (InstrumentTrack, PatternTrack, SampleTrack etc.) save its settings
 	element.appendChild( tsDe );
@@ -225,6 +234,9 @@ void Track::loadTrack(const QDomElement& element, bool presetMode)
 	{
 		setColor(QColor{element.attribute("color")});
 	}
+
+	m_group = element.attribute("trackgroup", "0").toInt();
+	m_groupName = element.attribute("trackgroupname");
 
 	if (presetMode)
 	{
@@ -535,6 +547,16 @@ void Track::setColor(const std::optional<QColor>& color)
 {
 	m_color = color;
 	emit colorChanged();
+}
+
+void Track::setGroup(int id, const QString& name)
+{
+	if (m_group != id || m_groupName != name)
+	{
+		m_group = id;
+		m_groupName = name;
+		emit groupChanged();
+	}
 }
 
 BoolModel *Track::getMutedModel()

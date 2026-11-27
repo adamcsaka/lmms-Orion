@@ -300,6 +300,18 @@ void ConfigManager::setBackgroundPicFile(const QString & backgroundPicFile)
 	m_backgroundPicFile = backgroundPicFile;
 }
 
+double ConfigManager::patternLengthCap() const
+{
+	bool ok = false;
+	const double cap = value("patterns", "lengthcap", "32").toDouble(&ok);
+	return ok ? cap : 32.0;
+}
+
+void ConfigManager::setPatternLengthCap(double bars)
+{
+	setValue("patterns", "lengthcap", QString::number(bars, 'g', 16));
+}
+
 void ConfigManager::createWorkingDir()
 {
 	QDir().mkpath(m_workingDir);
