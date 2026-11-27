@@ -37,11 +37,11 @@ Write-Host "Pruning intermediate compiler artifacts (.pdb, .obj, .ilk, CMakeFile
 Get-ChildItem -Path "$dest\plugins" -Directory | Where-Object { $_.Name -notin @("ladspa", "32") } | Remove-Item -Recurse -Force
 Get-ChildItem -Path "$dest\plugins" -Recurse -File | Where-Object { $_.Extension -notin @(".dll", ".exe") } | Remove-Item -Force
 
-# Remove experimental and crash-prone plugins as requested
-# (ZynAddSubFX is excluded: its parameter randomizer crashes the app on this build.
-#  CarlaRack/CarlaPatchBay/CarlaBase stay: they are the VST3/LV2/CLAP host with
-#  fully automatable per-parameter FloatModels.)
-Remove-Item -Force -ErrorAction SilentlyContinue "$dest\plugins\vital.dll", "$dest\plugins\oxosynth.dll", "$dest\plugins\zynaddsubfx.dll", "$dest\plugins\RemoteZynAddSubFx.exe"
+# Remove experimental, crash-prone, and superseded plugins as requested
+# (ZynAddSubFX: randomizer crashes. Vital/OxoSynth: excluded previously.
+#  Vestige + Carla family: removed - replaced by the native ModularSynth
+#  instrument which has built-in FM/ADSR and automatable parameters.)
+Remove-Item -Force -ErrorAction SilentlyContinue "$dest\plugins\vital.dll", "$dest\plugins\oxosynth.dll", "$dest\plugins\carlabase.dll", "$dest\plugins\carlarack.dll", "$dest\plugins\carlapatchbay.dll", "$dest\plugins\libcarla_native-plugin.dll", "$dest\plugins\vestige.dll", "$dest\plugins\zynaddsubfx.dll", "$dest\plugins\RemoteZynAddSubFx.exe"
 if (Test-Path "C:\lmms\v8-original copy\lmms-repo\data") {
     Copy-Item -Recurse "C:\lmms\v8-original copy\lmms-repo\data" -Destination $dest
 }
