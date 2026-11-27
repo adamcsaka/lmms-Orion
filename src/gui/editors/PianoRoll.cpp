@@ -810,6 +810,34 @@ void PianoRoll::reverseNotes()
 	Engine::getSong()->setModified();
 }
 
+void PianoRoll::duplicateNotes()
+{
+	if (!hasValidMidiClip()) { return; }
+
+	const NoteVector selectedNotes = getSelectedNotes();
+	const auto& notes = selectedNotes.empty() ? m_midiClip->notes() : selectedNotes;
+
+	m_midiClip->duplicateNotes(notes);
+
+	update();
+	getGUI()->songEditor()->update();
+	Engine::getSong()->setModified();
+}
+
+void PianoRoll::scaleNoteLengths(float factor)
+{
+	if (!hasValidMidiClip()) { return; }
+
+	const NoteVector selectedNotes = getSelectedNotes();
+	const auto& notes = selectedNotes.empty() ? m_midiClip->notes() : selectedNotes;
+
+	m_midiClip->scaleNoteLengths(notes, factor);
+
+	update();
+	getGUI()->songEditor()->update();
+	Engine::getSong()->setModified();
+}
+
 
 void PianoRoll::loadMarkedSemiTones(const QDomElement & de)
 {
@@ -5417,6 +5445,15 @@ PianoRollWindow::PianoRollWindow() :
 	connect(reverseAction, &QAction::triggered, [this](){ m_editor->reverseNotes(); });
 	reverseAction->setShortcut(keySequence(Qt::SHIFT, Qt::Key_R));
 
+	auto duplicateNotesAction = new QAction(embed::getIconPixmap("step_btn_duplicate"), tr("Duplicate Notes"), noteToolsButton);
+	connect(duplicateNotesAction, &QAction::triggered, [this](){ m_editor->duplicateNotes(); });
+
+	auto doubleLenAction = new QAction(embed::getIconPixmap("max_length"), tr("Double Note Lengths (x2)"), noteToolsButton);
+	connect(doubleLenAction, &QAction::triggered, [this](){ m_editor->scaleNoteLengths(2.0f); });
+
+	auto halveLenAction = new QAction(embed::getIconPixmap("min_length"), tr("Halve Note Lengths (/2)"), noteToolsButton);
+	connect(halveLenAction, &QAction::triggered, [this](){ m_editor->scaleNoteLengths(0.5f); });
+
 	auto flipHorizAction = new QAction(embed::getIconPixmap("flip_x"), tr("Flip Horizontally (Retrograde) (X)"), noteToolsButton);
 	connect(flipHorizAction, &QAction::triggered, [this](){ m_editor->flipHorizontally(); });
 
@@ -5431,6 +5468,9 @@ PianoRollWindow::PianoRollWindow() :
 	noteToolsButton->addAction(minLengthAction);
 	noteToolsButton->addAction(maxLengthAction);
 	noteToolsButton->addAction(reverseAction);
+	noteToolsButton->addAction(duplicateNotesAction);
+	noteToolsButton->addAction(doubleLenAction);
+	noteToolsButton->addAction(halveLenAction);
 	noteToolsButton->addAction(flipHorizAction);
 	noteToolsButton->addAction(flipVertAction);
 

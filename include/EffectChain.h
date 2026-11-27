@@ -27,7 +27,7 @@
 #define LMMS_EFFECT_CHAIN_H
 
 #include "Model.h"
-#include "SerializingObject.h"
+#include "JournallingObject.h"
 #include "AutomatableModel.h"
 
 namespace lmms
@@ -44,7 +44,7 @@ class EffectRackView;
 } // namespace gui
 
 
-class LMMS_EXPORT EffectChain : public Model, public SerializingObject
+class LMMS_EXPORT EffectChain : public Model, public JournallingObject
 {
 	Q_OBJECT
 public:

@@ -162,6 +162,14 @@ SongEditor::SongEditor( Song * song ) :
 
 	getGUI()->mainWindow()->addSpacingToToolBar( 10 );
 
+	auto swingSpinBox = new LcdFloatSpinBox( 3, 3, tr( "Swing" ), tb );
+	swingSpinBox->setModel( &m_song->swingModel() );
+	swingSpinBox->setLabel( tr( "SWING" ) );
+	swingSpinBox->setToolTip(tr("Swing amount in percent (0 = straight, ~67 = triplet feel)"));
+	getGUI()->mainWindow()->addWidgetToToolBar( swingSpinBox );
+
+	getGUI()->mainWindow()->addSpacingToToolBar( 10 );
+
 	auto master_vol_lbl = new QLabel(tb);
 	master_vol_lbl->setPixmap( embed::getIconPixmap( "master_volume" ) );
 

@@ -381,6 +381,50 @@ void MidiClip::reverseNotes(const NoteVector& notes)
 
 
 
+void MidiClip::duplicateNotes(const NoteVector& notes)
+{
+	if (notes.empty()) { return; }
+
+	addJournalCheckPoint();
+
+	// Offset copies by the total span of the selection so they tile
+	// seamlessly right after the originals.
+	TimePos firstPos = (*std::min_element(notes.begin(), notes.end(), [](const Note* n1, const Note* n2){ return Note::lessThan(n1, n2); }))->pos();
+	TimePos lastEnd = (*std::max_element(notes.begin(), notes.end(), [](const Note* n1, const Note* n2){ return n1->endPos() < n2->endPos(); }))->endPos();
+	const tick_t offset = lastEnd.getTicks() - firstPos.getTicks();
+	if (offset <= 0) { return; }
+
+	for (const auto& note : notes)
+	{
+		Note dup(*note);
+		dup.setPos(dup.pos() + offset);
+		addNote(dup, false);
+	}
+
+	rearrangeAllNotes();
+	emit dataChanged();
+}
+
+
+
+void MidiClip::scaleNoteLengths(const NoteVector& notes, float factor)
+{
+	if (notes.empty() || factor <= 0.0f) { return; }
+
+	addJournalCheckPoint();
+
+	for (auto note : notes)
+	{
+		if (note->type() == Note::Type::Step) { continue; }
+		note->setLength(std::max(1, static_cast<int>(std::round(note->length() * factor))));
+	}
+
+	rearrangeAllNotes();
+	emit dataChanged();
+}
+
+
+
 void MidiClip::splitNotes(const NoteVector& notes, TimePos pos)
 {
 	if (notes.empty()) { return; }
@@ -733,6 +777,7 @@ void MidiClip::setFractionalSteps( float steps )
 
 void MidiClip::duplicateContent()
 {
+	addJournalCheckPoint();
 	Engine::audioEngine()->requestChangeInModel();
 	const tick_t currentLen = length().getTicks();
 	if (currentLen <= 0)
@@ -776,6 +821,7 @@ void MidiClip::duplicateContent()
 void MidiClip::scaleContent(float percentage)
 {
 	if (percentage <= 0.0f) { return; }
+	addJournalCheckPoint();
 	const float ratio = percentage / 100.0f;
 	Engine::audioEngine()->requestChangeInModel();
 

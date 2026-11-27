@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v10.0.0] - Unreleased
+
+> Continuation of the v9 development line. Focus: comprehensive undo coverage, gesture-based automation recording, global swing, and new piano-roll note transforms.
+
+### Added
+- **Global Swing:** New "SWING" spinbox in the main toolbar (next to TEMPO/TIME SIG), backed by `Song::m_swingModel` (0–100%, persisted as the `swing` attribute in project files, reset with the song). During playback, notes falling on the off-16ths of each beat are delayed by up to half a 16th step — ~67% approximates a triplet/shuffle feel. Applies to both Song and Pattern playback in `InstrumentTrack::processNextBuffer()`.
+- **Piano-Roll Note Transforms:** The note-tools toolbar gains three new actions operating on the current selection (or all notes when nothing is selected): **Duplicate Notes** (clones the selection tiled seamlessly after itself), **Double Note Lengths (x2)**, and **Halve Note Lengths (/2)** — implemented as `MidiClip::duplicateNotes()` / `MidiClip::scaleNoteLengths()`.
+- **Gesture-Based Automation Recording:** `PatternStore::handleLiveAutomation()` now only records while the automatable model reports `isBeingManipulated()` — i.e. strictly during an active knob/slider drag. Programmatic value changes, armed-but-idle states, and post-release changes no longer write automation nodes or spawn empty automation clips. Step count still grows dynamically to fit recorded nodes.
+
+### Changed
+- **Undo/Redo — Effect Rack coverage:** `EffectChain` is now a `JournallingObject` (its `saveSettings`/`loadSettings` already round-trip the full chain), so the whole FX rack state is journaled. `EffectRackView` calls `addJournalCheckPoint()` before every structural mutation: add/paste/load effect group, delete plugin, move up/down, randomize rack, clear all effects, and programmatic inserts (`addEffectByName`, e.g. mixer EQ quick-insert). FX deletions, rack randomization, and reordering are now undoable.
+- **Undo/Redo — Clip transforms:** `MidiClip::duplicateContent()` ("Double content") and `MidiClip::scaleContent()` ("Halve content", percentage scaling) now take a journal checkpoint, making clip duplication and percentage transforms undoable.
+
+---
+
 ## [v9.0.0] - Unreleased
 
 > Development line branched from **v8-original** (`87949a18e`). Implements guide section 9: configurable pattern-length cap, multi-track selection/groups, and the workspace minimap port.

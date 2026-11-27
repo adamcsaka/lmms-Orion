@@ -38,7 +38,7 @@ namespace lmms
 
 EffectChain::EffectChain( Model * _parent ) :
 	Model( _parent ),
-	SerializingObject(),
+	JournallingObject(),
 	m_enabledModel( false, nullptr, tr( "Effects enabled" ) )
 {
 }

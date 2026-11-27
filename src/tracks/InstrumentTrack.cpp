@@ -797,6 +797,25 @@ bool InstrumentTrack::play( const TimePos & _start, const f_cnt_t _frames,
 
 	bool played_a_note = false;	// will be return variable
 
+	// Swing: off-16th notes inside each beat are delayed by up to
+	// half a 16th step (swing = 100% gives a dotted-8th feel)
+	tick_t swingDelayTicks = 0;
+	tick_t swingSlotTicks = 0;
+	if( auto* song = Engine::getSong() )
+	{
+		const float swing = song->swingModel().value();
+		if( swing > 0.0f )
+		{
+			const TimeSig sig( song->getTimeSigModel() );
+			const tick_t ticksPerBeat = TimePos::ticksPerBar( sig ) / std::max( 1, sig.numerator() );
+			swingSlotTicks = ticksPerBeat / 4;
+			if( swingSlotTicks > 0 )
+			{
+				swingDelayTicks = static_cast<tick_t>( swing * swingSlotTicks * 0.5f + 0.5f );
+			}
+		}
+	}
+
 	for (const auto& clip : clips)
 	{
 		auto c = dynamic_cast<MidiClip*>(clip);
@@ -838,7 +857,22 @@ bool InstrumentTrack::play( const TimePos & _start, const f_cnt_t _frames,
 		while (nit != notes.end() && (*nit)->pos() < c->length() - c->startTimeOffset())
 		{
 			const auto currentNote = *nit;
-			const bool shouldTrigger = (currentNote->pos() == cur_start
+			// Apply swing to the trigger position: notes on the off-16ths
+			// of each beat (relative to the song grid) are played late.
+			tick_t swungPosTicks = currentNote->pos().getTicks();
+			if( swingDelayTicks > 0 )
+			{
+				const tick_t absPosTicks = swungPosTicks
+					+ c->startPosition().getTicks() + c->startTimeOffset().getTicks();
+				const tick_t ticksPerBeat = swingSlotTicks * 4;
+				const tick_t withinBeat = absPosTicks % ticksPerBeat;
+				const tick_t slot = withinBeat / swingSlotTicks;
+				if( ( slot & 1 ) != 0 )
+				{
+					swungPosTicks += swingDelayTicks;
+				}
+			}
+			const bool shouldTrigger = (swungPosTicks == cur_start.getTicks()
 				|| (cur_start == -c->startTimeOffset() && (*nit)->pos() < cur_start && (*nit)->endPos() > cur_start));
 
 			if (!shouldTrigger)

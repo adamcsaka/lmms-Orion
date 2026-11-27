@@ -73,6 +73,7 @@ Song::Song() :
 								this ) ) ),
 	m_tempoModel( DefaultTempo, MinTempo, MaxTempo, 0.001f, this, tr( "Tempo" ) ),
 	m_timeSigModel( this ),
+	m_swingModel( 0.0f, 0.0f, 100.0f, 1.0f, this, tr( "Swing" ) ),
 	m_oldTicksPerBar( DefaultTicksPerBar ),
 	m_masterVolumeModel( 100, 0, 200, this, tr( "Master volume" ) ),
 	m_masterPitchModel( 0, -24, 24, this, tr( "Master pitch" ) ),
@@ -925,6 +926,7 @@ void Song::clearProject()
 	m_masterVolumeModel.reset();
 	m_masterPitchModel.reset();
 	m_timeSigModel.reset();
+	m_swingModel.reset();
 
 	// Clear the m_oldAutomatedValues AutomatedValueMap
 	m_oldAutomatedValues.clear();
@@ -1107,6 +1109,7 @@ void Song::loadProject( const QString & fileName )
 	m_timeSigModel.loadSettings( dataFile.head(), "timesig" );
 	m_masterVolumeModel.loadSettings( dataFile.head(), "mastervol" );
 	m_masterPitchModel.loadSettings( dataFile.head(), "masterpitch" );
+	m_swingModel.loadSettings( dataFile.head(), "swing" );
 
 	getTimeline(PlayMode::Song).setLoopEnabled(false);
 
@@ -1288,6 +1291,7 @@ bool Song::saveProjectFile(const QString & filename, bool withResources)
 	m_timeSigModel.saveSettings( dataFile, dataFile.head(), "timesig" );
 	m_masterVolumeModel.saveSettings( dataFile, dataFile.head(), "mastervol" );
 	m_masterPitchModel.saveSettings( dataFile, dataFile.head(), "masterpitch" );
+	m_swingModel.saveSettings( dataFile, dataFile.head(), "swing" );
 
 	saveState( dataFile, dataFile.content() );
 

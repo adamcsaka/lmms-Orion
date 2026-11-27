@@ -284,7 +284,7 @@ void PatternStore::setRecordingAutomation(bool record)
 
 void PatternStore::handleLiveAutomation(AutomatableModel* model)
 {
-	if (!m_recordAutomation || !model || !Engine::getSong() || !Engine::getSong()->isPlaying())
+	if (!m_recordAutomation || !model || !model->isBeingManipulated() || !Engine::getSong() || !Engine::getSong()->isPlaying())
 	{
 		return;
 	}
@@ -342,8 +342,6 @@ void PatternStore::handleLiveAutomation(AutomatableModel* model)
 		TimePos curPos = Engine::getSong()->getPlayPos(Song::PlayMode::Pattern);
 		const tick_t patLenTicks = std::max(TimePos::ticksPerBar(), static_cast<tick_t>(lengthOfCurrentPattern() * DefaultTicksPerBar));
 		curPos = TimePos(curPos.getTicks() % patLenTicks);
-
-		const bool activeDrag = model->isBeingManipulated();
 
 		if (isNewClip && targetClip->steps() == 0)
 		{

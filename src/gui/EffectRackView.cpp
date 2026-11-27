@@ -140,6 +140,7 @@ void EffectRackView::clearViews()
 
 void EffectRackView::moveUp( EffectView* view )
 {
+	if (fxChain()) { fxChain()->addJournalCheckPoint(); }
 	fxChain()->moveUp( view->effect() );
 	if( view != m_effectViews.first() )
 	{
@@ -184,6 +185,7 @@ void EffectRackView::moveDown( EffectView* view )
 
 void EffectRackView::deletePlugin( EffectView* view )
 {
+	if (fxChain()) { fxChain()->addJournalCheckPoint(); }
 	Effect * e = view->effect();
 	m_effectViews.erase( std::find( m_effectViews.begin(), m_effectViews.end(), view ) );
 	delete view;
@@ -294,6 +296,7 @@ void EffectRackView::addEffect()
 
 	Effect * fx = esd.instantiateSelectedPlugin( fxChain() );
 
+	fxChain()->addJournalCheckPoint();
 	fxChain()->appendEffect( fx );
 	update();
 
@@ -367,6 +370,7 @@ void EffectRackView::pasteEffect()
 			Effect* e = Effect::instantiate( name, fxChain(), &key );
 			if (e != nullptr && e->isOkay())
 			{
+				fxChain()->addJournalCheckPoint();
 				e->restoreState( effectData );
 				fxChain()->appendEffect( e );
 			}
@@ -453,6 +457,7 @@ void EffectRackView::loadEffectChain()
 
 	if (!fxElement.isNull())
 	{
+		fxChain()->addJournalCheckPoint();
 		fxChain()->clear();
 		fxChain()->loadSettings(fxElement);
 		update();
@@ -476,7 +481,7 @@ void EffectRackView::contextMenuEvent( QContextMenuEvent* event )
 	contextMenu->addAction( embed::getIconPixmap( "arp_random" ), tr( "&Randomize effect rack..." ), this, SLOT(randomizeEffects()) );
 	contextMenu->addSeparator();
 	contextMenu->addAction( embed::getIconPixmap( "cancel" ), tr( "&Clear all effects" ), this, [this]() {
-		if (fxChain()) { fxChain()->clear(); update(); }
+		if (fxChain()) { fxChain()->addJournalCheckPoint(); fxChain()->clear(); update(); }
 	} );
 	contextMenu->exec( QCursor::pos() );
 	delete contextMenu;
@@ -505,6 +510,7 @@ void EffectRackView::randomizeEffects()
 	};
 	const int numFx = sizeof(fxPlugins) / sizeof(fxPlugins[0]);
 
+	fxChain()->addJournalCheckPoint();
 	fxChain()->clear();
 
 	for (int i = 0; i < count; ++i)
@@ -567,6 +573,7 @@ Effect* EffectRackView::addEffectByName(const QString& pluginName)
 		return nullptr;
 	}
 
+	fxChain()->addJournalCheckPoint();
 	fxChain()->appendEffect(fx);
 	update();
 

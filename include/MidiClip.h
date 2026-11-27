@@ -80,6 +80,8 @@ public:
 
 	//! Horizontally flip the positions of the given notes.
 	void reverseNotes(const NoteVector& notes);
+	void duplicateNotes(const NoteVector& notes);
+	void scaleNoteLengths(const NoteVector& notes, float factor);
 
 	// Split the list of notes on the given position
 	void splitNotes(const NoteVector& notes, TimePos pos);

@@ -316,6 +316,11 @@ public:
 		return m_tempoModel;
 	}
 
+	FloatModel& swingModel()
+	{
+		return m_swingModel;
+	}
+
 	void exportProjectMidi(const std::filesystem::path& filePath) const;
 
 	inline void setLoadOnLaunch(bool value) { m_loadOnLaunch = value; }
@@ -416,6 +421,7 @@ private:
 
 	FloatModel m_tempoModel;
 	MeterModel m_timeSigModel;
+	FloatModel m_swingModel;
 	int m_oldTicksPerBar;
 	IntModel m_masterVolumeModel;
 	IntModel m_masterPitchModel;
