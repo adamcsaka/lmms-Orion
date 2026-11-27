@@ -287,6 +287,45 @@ void ModularSynth::playNote( NotePlayHandle * _n,
 
 	const int oscCount = static_cast<int>( m_oscs.size() );
 
+	// Cache oscillator parameters once per buffer period - model values
+	// cannot meaningfully change inside a single audio period, and this
+	// keeps the per-sample loop cheap even with many oscillators.
+	struct CachedOsc
+	{
+		float freq;
+		float amp;
+		float panL;
+		float panR;
+		float fmDepth;
+		int wave;
+		int fmSrc;
+		bool enabled;
+	} ;
+	CachedOsc cached[MaxOscillators];
+	int activeOscCount = 0;
+	for ( int o = 0; o < oscCount && o < MaxOscillators; ++o )
+	{
+		auto* osc = m_oscs[o];
+		CachedOsc& c = cached[o];
+		c.enabled = osc->m_enabledModel.value();
+		c.wave = osc->m_waveModel.value();
+		c.freq = osc->m_freqModel.value();
+		c.amp = osc->m_ampModel.value();
+		c.fmSrc = osc->m_fmSrcModel.value();
+		c.fmDepth = osc->m_fmDepthModel.value();
+		const float pan = osc->m_panModel.value();
+		c.panL = 1.0f - std::max( pan, 0.0f );
+		c.panR = 1.0f + std::min( pan, 0.0f );
+		if ( c.enabled && c.amp != 0.0f ) { ++activeOscCount; }
+	}
+
+	// silent patch: skip the per-sample loop entirely
+	if ( activeOscCount == 0 )
+	{
+		nd->envFrames += frames;
+		return;
+	}
+
 	for ( f_cnt_t i = 0; i < frames; ++i )
 	{
 		const f_cnt_t g = nd->envFrames + i;
@@ -345,40 +384,31 @@ void ModularSynth::playNote( NotePlayHandle * _n,
 		for ( int o = 0; o < oscCount && o < static_cast<int>( nd->oscs.size() ); ++o )
 		{
 			auto& st = nd->oscs[o];
-			auto* osc = m_oscs[o];
+			const CachedOsc& c = cached[o];
 
-			if ( !osc->m_enabledModel.value() ) { continue; }
-
-			const float amp = osc->m_ampModel.value();
-			if ( amp == 0.0f ) { continue; }
+			if ( !c.enabled || c.amp == 0.0f ) { continue; }
 
 			// FM: one-sample-delayed modulator output keeps cycles stable
 			float mod = 0.0f;
-			const int src = osc->m_fmSrcModel.value();
-			if ( src >= 0 && src < oscCount && src != o &&
-				 src < static_cast<int>( nd->oscs.size() ) )
+			if ( c.fmSrc >= 0 && c.fmSrc < oscCount && c.fmSrc != o &&
+				 c.fmSrc < static_cast<int>( nd->oscs.size() ) )
 			{
-				mod = nd->oscs[src].prevOut;
+				mod = nd->oscs[c.fmSrc].prevOut;
 			}
 
-			const float freq = osc->m_freqModel.value() +
-							   osc->m_fmDepthModel.value() * mod;
-			const float dt = static_cast<float>( freq * invSr );
+			const float dt = static_cast<float>(
+				( c.freq + c.fmDepth * mod ) * invSr );
 
-			const float v = waveValue( osc->m_waveModel.value(), st.phase,
-									   dt, st.rng );
+			const float v = waveValue( c.wave, st.phase, dt, st.rng );
 
 			st.phase += static_cast<double>( dt );
 			st.phase -= std::floor( st.phase );
 
-			const float out = v * amp;
+			const float out = v * c.amp;
 			st.prevOut = out;
 
-			const float pan = osc->m_panModel.value();
-			const float oL = 1.0f - std::max( pan, 0.0f );
-			const float oR = 1.0f + std::min( pan, 0.0f );
-			mixL += out * oL;
-			mixR += out * oR;
+			mixL += out * c.panL;
+			mixR += out * c.panR;
 		}
 
 		const float level = env * masterVol;
@@ -743,3 +773,15 @@ void ModularSynthView::removeOscBox( ModularOscBox * _box )
 
 
 } // namespace lmms
+
+
+extern "C"
+{
+
+// necessary for getting instance out of shared lib
+Q_DECL_EXPORT lmms::Plugin * lmms_plugin_main( lmms::Model * m, void * )
+{
+	return new lmms::ModularSynth( static_cast<lmms::InstrumentTrack *>( m ) );
+}
+
+}
