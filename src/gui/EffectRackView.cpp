@@ -47,6 +47,7 @@
 #include "EffectView.h"
 #include "GroupBox.h"
 #include "Song.h"
+#include "ProjectJournal.h"
 #include "TextFloat.h"
 
 
@@ -511,6 +512,13 @@ void EffectRackView::randomizeEffects()
 	const int numFx = sizeof(fxPlugins) / sizeof(fxPlugins[0]);
 
 	fxChain()->addJournalCheckPoint();
+
+	// Each effect parameter setValue() would push its own journal checkpoint;
+	// suppress them so the whole rack randomization is a single undo step.
+	auto* journal = Engine::projectJournal();
+	const bool prevJournalling = journal ? journal->isJournalling() : true;
+	if (journal) { journal->setJournalling(false); }
+
 	fxChain()->clear();
 
 	for (int i = 0; i < count; ++i)
@@ -547,6 +555,8 @@ void EffectRackView::randomizeEffects()
 	}
 
 	update();
+
+	if (journal) { journal->setJournalling(prevJournalling); }
 
 	if (Engine::getSong())
 	{

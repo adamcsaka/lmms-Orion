@@ -284,10 +284,12 @@ void ThemeDialog::onRandomizeAllColors()
 		"border", "grid", "beatLine", "barLine", "note", "selected",
 		"field", "slider", "header"
 	};
+	QMap<QString, QColor> colors;
 	for (const char* key : keys)
 	{
-		ThemeManager::inst()->setThemeColor(QString::fromLatin1(key), randomColor());
+		colors.insert(QString::fromLatin1(key), randomColor());
 	}
+	ThemeManager::inst()->setThemeColors(colors);
 	updateSwatches();
 }
 

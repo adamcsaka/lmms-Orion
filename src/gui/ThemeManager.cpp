@@ -43,6 +43,41 @@ static void fillDerivedThemeColors(ThemePreset& p)
 	if (p.headerColor.isEmpty()) { p.headerColor = QColor(p.baseColor).lighter(115).name(); }
 }
 
+static void assignAccentFields(ThemePreset& t, const QColor& color)
+{
+	t.accentColor = color.name();
+	t.accentHover = color.lighter(115).name();
+	t.barLineColor = color.name();
+	t.noteColor = color.name();
+	t.beatLineColor = color.darker(150).name();
+	t.selectedColor = color.darker(130).name();
+	t.textActive = (color.lightness() > 160) ? "#101010" : "#ffffff";
+	if (t.borderColor.isEmpty()) { t.borderColor = color.name(); }
+}
+
+// Assigns one theme color field without applying the theme. Returns false for
+// unknown keys. "accent" also refreshes its derived colors.
+static bool assignThemeField(ThemePreset& t, const QString& key, const QColor& color)
+{
+	if (key == QLatin1String("accent")) { assignAccentFields(t, color); return true; }
+	if (key == QLatin1String("accentHover")) { t.accentHover = color.name(); }
+	else if (key == QLatin1String("textActive")) { t.textActive = color.name(); }
+	else if (key == QLatin1String("textColor")) { t.textColor = color.name(); }
+	else if (key == QLatin1String("base")) { t.baseColor = color.name(); }
+	else if (key == QLatin1String("window")) { t.windowColor = color.name(); }
+	else if (key == QLatin1String("border")) { t.borderColor = color.name(); }
+	else if (key == QLatin1String("grid")) { t.gridColor = color.name(); }
+	else if (key == QLatin1String("beatLine")) { t.beatLineColor = color.name(); }
+	else if (key == QLatin1String("barLine")) { t.barLineColor = color.name(); }
+	else if (key == QLatin1String("note")) { t.noteColor = color.name(); }
+	else if (key == QLatin1String("selected")) { t.selectedColor = color.name(); }
+	else if (key == QLatin1String("field")) { t.fieldColor = color.name(); }
+	else if (key == QLatin1String("slider")) { t.sliderColor = color.name(); }
+	else if (key == QLatin1String("header")) { t.headerColor = color.name(); }
+	else { return false; }
+	return true;
+}
+
 ThemeManager* ThemeManager::inst()
 {
 	static ThemeManager s_instance;
@@ -248,14 +283,7 @@ void ThemeManager::applyThemeByName(const QString& name)
 void ThemeManager::setAccentColor(const QColor& color)
 {
 	if (!color.isValid()) return;
-	m_currentTheme.accentColor = color.name();
-	m_currentTheme.accentHover = color.lighter(115).name();
-	m_currentTheme.barLineColor = color.name();
-	m_currentTheme.noteColor = color.name();
-	m_currentTheme.beatLineColor = color.darker(150).name();
-	m_currentTheme.selectedColor = color.darker(130).name();
-	m_currentTheme.textActive = (color.lightness() > 160) ? "#101010" : "#ffffff";
-	if (m_currentTheme.borderColor.isEmpty()) { m_currentTheme.borderColor = color.name(); }
+	assignAccentFields(m_currentTheme, color);
 	applyTheme(m_currentTheme, true);
 }
 
@@ -313,23 +341,23 @@ void ThemeManager::setThemeColor(const QString& key, const QColor& color)
 	}
 
 	auto& t = m_currentTheme;
-	if (key == QLatin1String("accentHover")) { t.accentHover = color.name(); }
-	else if (key == QLatin1String("textActive")) { t.textActive = color.name(); }
-	else if (key == QLatin1String("textColor")) { t.textColor = color.name(); }
-	else if (key == QLatin1String("base")) { t.baseColor = color.name(); }
-	else if (key == QLatin1String("window")) { t.windowColor = color.name(); }
-	else if (key == QLatin1String("border")) { t.borderColor = color.name(); }
-	else if (key == QLatin1String("grid")) { t.gridColor = color.name(); }
-	else if (key == QLatin1String("beatLine")) { t.beatLineColor = color.name(); }
-	else if (key == QLatin1String("barLine")) { t.barLineColor = color.name(); }
-	else if (key == QLatin1String("note")) { t.noteColor = color.name(); }
-	else if (key == QLatin1String("selected")) { t.selectedColor = color.name(); }
-	else if (key == QLatin1String("field")) { t.fieldColor = color.name(); }
-	else if (key == QLatin1String("slider")) { t.sliderColor = color.name(); }
-	else if (key == QLatin1String("header")) { t.headerColor = color.name(); }
-	else { return; }
+	if (assignThemeField(t, key, color))
+	{
+		applyTheme(m_currentTheme, true);
+	}
+}
 
-	applyTheme(m_currentTheme, true);
+void ThemeManager::setThemeColors(const QMap<QString, QColor>& colors)
+{
+	bool changed = false;
+	for (auto it = colors.constBegin(); it != colors.constEnd(); ++it)
+	{
+		if (it.value().isValid() && assignThemeField(m_currentTheme, it.key(), it.value()))
+		{
+			changed = true;
+		}
+	}
+	if (changed) { applyTheme(m_currentTheme, true); }
 }
 
 void ThemeManager::setBackgroundPicture(const QString& path)

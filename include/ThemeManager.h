@@ -21,6 +21,7 @@
 
 #include <QColor>
 #include <QDomDocument>
+#include <QMap>
 #include <QDomElement>
 #include <QObject>
 #include <QString>
@@ -76,6 +77,8 @@ public:
 	// "textColor", "base", "window", "border", "grid", "beatLine", "barLine",
 	// "note", "selected", "field", "slider", "header".
 	void setThemeColor(const QString& key, const QColor& color);
+	// Batch variant: applies all colors, then restyles the app once.
+	void setThemeColors(const QMap<QString, QColor>& colors);
 	void setBackgroundPicture(const QString& path);
 	void clearBackgroundPicture();
 

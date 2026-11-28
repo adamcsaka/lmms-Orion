@@ -43,6 +43,7 @@
 #include "PatternTrack.h"
 #include "PianoRoll.h"
 #include "Pitch.h"
+#include "ProjectJournal.h"
 #include "Song.h"
 
 namespace lmms
@@ -1250,6 +1251,19 @@ void InstrumentTrack::randomizeParameters(bool randomizePitch)
 {
 	addJournalCheckPoint();
 
+	// The effect-chain parameters randomized below live on the mixer channel,
+	// outside this track's journal state - snapshot them separately.
+	EffectChain* fxChain = (audioBusHandle() && audioBusHandle()->effects())
+		? audioBusHandle()->effects() : nullptr;
+	if (fxChain) { fxChain->addJournalCheckPoint(); }
+
+	// Every AutomatableModel::setValue() pushes its own journal checkpoint, so
+	// suppress journalling for the whole batch: the track (and fx chain)
+	// checkpoints above make this a single undo step instead of hundreds.
+	auto* journal = Engine::projectJournal();
+	const bool prevJournalling = journal ? journal->isJournalling() : true;
+	if (journal) { journal->setJournalling(false); }
+
 	if (randomizePitch)
 	{
 		m_pitchModel.setValue(static_cast<float>((rand() % 25 - 12) * 100));
@@ -1448,6 +1462,8 @@ void InstrumentTrack::randomizeParameters(bool randomizePitch)
 	{
 		Engine::getSong()->setModified();
 	}
+
+	if (journal) { journal->setJournalling(prevJournalling); }
 }
 
 
