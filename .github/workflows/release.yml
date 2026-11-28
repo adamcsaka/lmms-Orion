@@ -224,7 +224,11 @@ jobs:
 
   publish-release:
     name: Publish GitHub Release
-    needs: [windows, linux, macos]
+    # macOS is intentionally excluded: macos-13 runners never get scheduled on
+    # this account, which would block publishing forever. The macos job still
+    # runs opportunistically; when it produces a DMG it can be added to the
+    # release manually.
+    needs: [windows, linux]
     runs-on: ubuntu-latest
     steps:
       - name: Download all build artifacts
