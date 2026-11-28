@@ -30,7 +30,16 @@ permissions:
 # Note: PLUGIN_LIST is a ;-separated CMake list internally; spaces are the
 # documented user-facing separator and are converted by PluginList.cmake.
 env:
-  PLUGIN_LIST: "Amplifier BassBooster BitInvader Bitcrush Compressor CrossoverEQ Delay Dispersion DualFilter DynamicsProcessor Eq Flanger FrequencyShifter GranularPitchShifter HydrogenImport LadspaBrowser LadspaEffect LOMM Lv2Effect Lv2Instrument Lb302 MidiImport MidiExport MultitapEcho ModularSynth Monstro Nes OpulenZ Organic Oscilloscope FreeBoy Patman PeakControllerEffect GigPlayer ReverbSC Sf2Player Sfxr Sid SlewDistortion SlicerT SpectrumAnalyzer StereoEnhancer StereoMatrix Stk TapTempo VstBase VstEffect Watsyn WaveShaper Vectorscope Vibed Xpressive"
+  PLUGIN_LIST: >-
+    Amplifier BassBooster BitInvader Bitcrush Compressor CrossoverEQ Delay
+    Dispersion DualFilter DynamicsProcessor Eq Flanger FrequencyShifter
+    GranularPitchShifter HydrogenImport LadspaBrowser LadspaEffect LOMM
+    Lv2Effect Lv2Instrument Lb302 MidiImport MidiExport MultitapEcho
+    ModularSynth Monstro Nes OpulenZ Organic Oscilloscope FreeBoy Patman
+    PeakControllerEffect GigPlayer ReverbSC Sf2Player Sfxr Sid
+    SlewDistortion SlicerT SpectrumAnalyzer StereoEnhancer StereoMatrix
+    Stk TapTempo VstBase VstEffect Watsyn WaveShaper Vectorscope Vibed
+    Xpressive
 
 jobs:
   windows:
