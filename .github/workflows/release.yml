@@ -143,6 +143,10 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             $(xargs < .github/workflows/deps-ubuntu-24.04-gcc.txt) \
             extra-cmake-modules ninja-build libfltk1.3-dev || true
+          # Qt6 is required (WANT_QT6=ON); install it separately so a missing
+          # package fails loudly instead of being masked by the || true above.
+          sudo apt-get install -y --no-install-recommends \
+            qt6-base-dev libqt6svg6-dev qt6-tools-dev-tools
 
       - name: Configure CMake
         run: |
