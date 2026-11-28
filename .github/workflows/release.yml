@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release Tag (e.g. v7.0.0)'
+        description: 'Release Tag (e.g. v10.0.0)'
         required: true
-        default: 'v7.0.0'
+        default: 'v10.0.0'
       release_name:
         description: 'Release Name / Title'
         required: true
-        default: 'LMMS Orion v7.0.0'
+        default: 'LMMS Orion v10.0.0'
       prerelease:
         description: 'Mark as Pre-release'
         required: false
@@ -22,6 +22,15 @@ on:
 
 permissions:
   contents: write
+
+# Plugins excluded from release builds (match deploy-v9.ps1 packaging):
+#   CarlaBase/CarlaPatchbay/CarlaRack - unreliable on Windows targets
+#   Vestige - VST2-only bridge, superseded by ModularSynth
+#   ZynAddSubFX - randomizer crashes
+# Note: PLUGIN_LIST is a ;-separated CMake list internally; spaces are the
+# documented user-facing separator and are converted by PluginList.cmake.
+env:
+  PLUGIN_LIST: "Amplifier BassBooster BitInvader Bitcrush Compressor CrossoverEQ Delay Dispersion DualFilter DynamicsProcessor Eq Flanger FrequencyShifter GranularPitchShifter HydrogenImport LadspaBrowser LadspaEffect LOMM Lv2Effect Lv2Instrument Lb302 MidiImport MidiExport MultitapEcho ModularSynth Monstro Nes OpulenZ Organic Oscilloscope FreeBoy Patman PeakControllerEffect GigPlayer ReverbSC Sf2Player Sfxr Sid SlewDistortion SlicerT SpectrumAnalyzer StereoEnhancer StereoMatrix Stk TapTempo VstBase VstEffect Watsyn WaveShaper Vectorscope Vibed Xpressive"
 
 jobs:
   windows:
@@ -82,6 +91,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=RelWithDebInfo `
             -DTARGET_UARCH=official `
             -DWANT_QT6=ON `
+            -DPLUGIN_LIST="${{ env.PLUGIN_LIST }}" `
             -DUSE_COMPILE_CACHE=ON `
             -DUSE_WERROR=OFF `
             -DVCPKG_TARGET_TRIPLET="x64-windows" `
@@ -93,7 +103,7 @@ jobs:
       - name: Package Portable ZIP & Installer
         run: |
           cmake --install build --prefix build\portable
-          $zipName = "LMMS-Orion-v7-win64-portable.zip"
+          $zipName = "LMMS-Orion-v10-win64-portable.zip"
           Compress-Archive -Path build\portable\* -DestinationPath "build\$zipName"
           cmake --build build --target package || true
 
@@ -131,6 +141,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DTARGET_UARCH=official \
             -DWANT_QT6=ON \
+            -DPLUGIN_LIST="${{ env.PLUGIN_LIST }}" \
             -DUSE_WERROR=OFF \
             -DWANT_DEBUG_CPACK=ON
 
@@ -172,6 +183,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DTARGET_UARCH=official \
             -DWANT_QT6=ON \
+            -DPLUGIN_LIST="${{ env.PLUGIN_LIST }}" \
             -DUSE_WERROR=OFF
 
       - name: Build LMMS
