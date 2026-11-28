@@ -104,3 +104,10 @@ Ez a dokumentum az **LMMS Orion** teljes fejlesztési, felépítési és konfigu
   - **AVX2 SIMD keverőmotor és CPU védelem:** Valós idejű SIMD audio mixelés AVX2 vektorizációval, dinamikus CPUID detektálással és SSE tartalékkal.
   - **Biztonságos, izolált telepítés (`deploy-v7.ps1`):** Telepítés dedikált `LMMS-Orion-v7` mappába a Windows fájlzárolások (`EBUSY`) elkerülésére.
   - **Rendszerezett változáskövetés (`CHANGELOG.md`):** Minden módosítás dátummal, commit hash-sel és leírással való dokumentálása.
+
+## 8. Tervezett v9 ötletek (lásd: `C:\lmms\v8-original\V8_ORIGINAL_GUIDE.md` 9. szekció)
+
+- Multi-sáv kijelölés + track csoportok + csoportos szín (Song/Pattern/Mixer editorok).
+- Konfigurálható LCM minta-hossz korlát (32 ütem sapka → user-defined / unlimited,
+  decimális lépésekkel kompatibilis, Pattern Editor beállítás, Song Editor is azt használja).
+- WorkspaceMinimap / ablakkezelés visszahozása a régi master (v8) kísérletből.
